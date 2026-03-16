@@ -10,7 +10,7 @@ PR2-Sim-Pure 是抽取出的 **PR2 专用最小仿真栈**，仅保留 MuJoCo + 
 ## 仓库说明
 
 - **项目类型**：PR2 移动操作机器人仿真工程
-- **技术栈**：MuJoCo、ROS 2 Humble、ros2_control、DDS(Unitree SDK2 通道层)
+- **技术栈**：MuJoCo、ROS 2 Jazzy、ros2_control、DDS(Unitree SDK2 通道层)
 - **定位**：研究/教学导向的轻量仿真基线
 - **适用场景**：PR2 运动控制验证、算法集成、仿真实验复现
 
