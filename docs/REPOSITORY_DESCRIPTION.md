@@ -6,7 +6,7 @@
   Minimal PR2 simulation stack (MuJoCo + ROS2) extracted from Human-Robot-Cooperation.
 
 - **Website**  
-  可留空，或填写你的论文/项目主页。
+  暂无
 
 - **Topics**  
   `pr2`, `mujoco`, `ros2`, `ros2-control`, `robotics`, `simulation`
