@@ -56,10 +56,10 @@ sudo apt update
 sudo apt install -y \
   build-essential cmake git \
   libyaml-cpp-dev libglfw3-dev libboost-all-dev libspdlog-dev \
-  ros-humble-ros2-control ros-humble-ros2-controllers \
-  ros-humble-rclcpp ros-humble-controller-manager \
-  ros-humble-joint-state-broadcaster ros-humble-robot-state-publisher \
-  ros-humble-xacro
+  ros-jazzy-ros2-control ros-jazzy-ros2-controllers \
+  ros-jazzy-rclcpp ros-jazzy-controller-manager \
+  ros-jazzy-joint-state-broadcaster ros-jazzy-robot-state-publisher \
+  ros-jazzy-xacro
 ```
 
 ### 2) unitree_sdk2
