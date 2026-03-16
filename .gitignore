@@ -1,0 +1,20 @@
+# ROS 2
+**/build/
+**/install/
+**/log/
+
+# CMake
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/Makefile
+
+# MuJoCo local link
+unitree_mujoco/simulate/mujoco
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
