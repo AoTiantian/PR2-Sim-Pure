@@ -1,11 +1,11 @@
 # PR2-Sim-Pure
 
-PR2-Sim-Pure 是从原始 `Human-Robot-Cooperation` 项目中抽取出的 **PR2 专用最小仿真栈**，仅保留 MuJoCo + ROS 2 控制闭环所需组件。
+PR2-Sim-Pure 是抽取出的 **PR2 专用最小仿真栈**，仅保留 MuJoCo + ROS 2 控制闭环所需组件。
 
 目标：
 - 保留完整 PR2 仿真能力（模型、控制、状态发布、底盘控制）
 - 删除与 PR2 仿真无关的多平台耦合代码（Moying/Unitree 其他机型/EtherCAT 实机链路）
-- 降低项目复杂度，便于二次开发与维护
+- 修改代码错误，便于二次开发与维护
 
 ## 仓库说明
 
