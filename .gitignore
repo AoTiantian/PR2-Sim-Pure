@@ -1,0 +1,8 @@
+build/
+install/
+log/
+pr2_ws/build/
+pr2_ws/install/
+pr2_ws/log/
+*.pyc
+__pycache__/

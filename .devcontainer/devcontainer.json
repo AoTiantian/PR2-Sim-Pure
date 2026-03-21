@@ -1,0 +1,31 @@
+{
+  "name": "PR2 Sim Pure (ROS 2 Jazzy)",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "args": {
+      "APT_MIRROR": "mirrors.tuna.tsinghua.edu.cn",
+      "ROS_MIRROR": "mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu"
+    }
+  },
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspaces/PR2-Sim-Pure",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/PR2-Sim-Pure,type=bind,consistency=cached",
+  "postCreateCommand": "bash .devcontainer/postCreate.sh",
+  "containerEnv": {
+    "ROS_DISTRO": "jazzy"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-vscode.cpptools",
+        "ms-iot.vscode-ros",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
