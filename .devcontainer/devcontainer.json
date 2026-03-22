@@ -1,0 +1,26 @@
+{
+    "name": "ROS2 Mujoco Project",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "workspaceFolder": "/workspace",
+    "mounts": [
+        "source=${localWorkspaceFolder},target=/workspace,type=bind"
+    ],
+    "runArgs": [
+        "--net=host",
+        "--ipc=host",
+        "--gpus=all",
+        "-e", "DISPLAY=${localEnv:DISPLAY}",
+        "-v", "/tmp/.X11-unix:/tmp/.X11-unix"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-iot.vscode-ros",
+                "ms-python.python"
+            ]
+        }
+    },
+    "postCreateCommand": "rosdep update"
+}

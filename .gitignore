@@ -1,0 +1,37 @@
+# --- ROS 2 build artifacts ---
+build/
+install/
+log/
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- MuJoCo ---
+# 如果你在本地下载了 MuJoCo 的压缩包或动态库，请忽略
+*.tar.gz
+*.so
+MUJOCO_LOG.TXT
+
+# --- IDE Settings ---
+.vscode/*
+!.vscode/launch.json
+.history/
+.cursor/
+
+# --- OS generated files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
