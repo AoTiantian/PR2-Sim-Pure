@@ -24,6 +24,27 @@ cd /path/to/PR2-Sim-Pure
 docker build -t pr2-sim-pure:jazzy .
 ```
 
+If your user is not yet in `docker` group, use `sudo docker ...` first.
+
+## One-Command Smoke Test In Docker
+
+Run from host:
+
+```bash
+cd /path/to/PR2-Sim-Pure
+docker run --rm -it \
+  -v "$(pwd)":/workspaces/PR2-Sim-Pure \
+  pr2-sim-pure:jazzy \
+  bash scripts/container_smoke.sh
+```
+
+What it checks:
+- build `pr2_description` + `pr2_mobile_controller` + `pr2_bringup`
+- launch `pr2_control_mock.launch.py`
+- verify `pr2_omni_controller` and `joint_state_broadcaster` are `active`
+- run `pr2_base_fixed_cmd.py`
+- confirm `/pr2/joint_states` contains non-zero wheel velocities during motion
+
 ## Control-Link Acceptance (No SDK / No MuJoCo)
 
 Terminal 1:
