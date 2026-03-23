@@ -9,7 +9,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/launch", ["launch/pr2_mujoco_sim.launch.py"]),
+        ("share/" + package_name + "/launch", ["launch/pr2_mujoco_sim.launch.py", "launch/pr2_left_arm_ik.launch.py", "launch/pr2_ee_pose.launch.py"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -21,6 +21,8 @@ setup(
     entry_points={
         "console_scripts": [
             "pr2_mujoco_sim = pr2_controller.pr2_sim_ros:main",
+            "pr2_left_arm_ik = pr2_controller.pr2_left_arm_ik:main",
+            "pr2_ee_pose_publisher = pr2_controller.pr2_ee_pose_publisher:main",
         ],
     },
 )

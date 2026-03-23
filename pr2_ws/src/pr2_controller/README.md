@@ -69,3 +69,85 @@ ros2 topic pub --once /joint_commands sensor_msgs/msg/JointState \
 ```
 
 （该关节对应执行器 `l_shoulder_lift_tau`，使用 `effort` 字段。）
+
+
+## 拟运动学（IK）求解器（新增）
+
+已新增节点：`pr2_left_arm_ik`（文件：`pr2_controller/pr2_left_arm_ik.py`）。
+
+功能：
+
+- 订阅末端目标位姿：`ik_target_pose`（`geometry_msgs/PoseStamped`）
+- 订阅当前关节状态：`joint_states`
+- 使用 MuJoCo 雅可比做阻尼最小二乘（DLS）拟运动学
+- 输出关节力矩命令到 `joint_commands`（`JointState.effort`），驱动左臂 `*_tau` 执行器
+
+> 建议运行主仿真节点时使用 `demo_motion:=false`，避免与 IK 控制冲突。
+
+### 启动顺序
+
+终端 1（仿真）：
+
+```bash
+cd /workspace/pr2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run pr2_controller pr2_mujoco_sim --ros-args -p demo_motion:=false
+```
+
+终端 2（IK）：
+
+```bash
+cd /workspace/pr2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run pr2_controller pr2_left_arm_ik
+# 或
+ros2 launch pr2_controller pr2_left_arm_ik.launch.py
+```
+
+终端 3（发送目标位姿）：
+
+```bash
+ros2 topic pub /ik_target_pose geometry_msgs/msg/PoseStamped "
+header:
+  frame_id: 'world'
+pose:
+  position: {x: -2.6, y: 2.2, z: 1.1}
+  orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+"
+```
+
+### 关键参数（`pr2_left_arm_ik`）
+
+- `controlled_joints`：默认左臂 7 关节
+- `end_effector_body`：默认 `l_gripper_tool_frame`
+- `damping_lambda`：DLS 阻尼（越大越稳，越小越灵敏）
+- `step_size`、`max_step_rad`：每周期关节迭代步长
+- `torque_kp`、`torque_kd`：将 IK 目标转为力矩命令的 PD 增益
+- `use_orientation`：是否同时跟踪末端姿态（false 时仅跟踪位置）
+
+更详细说明见：`README_IK.md`
+
+
+## 末端位姿监测（EE Pose）
+
+已新增节点：`pr2_ee_pose_publisher`。
+
+- 订阅：`joint_states`
+- 发布：`ee_pose`（`geometry_msgs/PoseStamped`）
+- 默认末端 body：`l_gripper_tool_frame`
+
+运行：
+
+```bash
+ros2 run pr2_controller pr2_ee_pose_publisher
+# 或
+ros2 launch pr2_controller pr2_ee_pose.launch.py
+```
+
+查看：
+
+```bash
+ros2 topic echo /ee_pose
+```
