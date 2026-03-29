@@ -18,7 +18,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     sim_node = Node(
-        package="pr2_controller",
+        package="pr2_mujoco_bridge",
         executable="pr2_mujoco_sim",
         name="pr2_mujoco_sim",
         output="screen",

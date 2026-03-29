@@ -17,7 +17,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     node = Node(
-        package="pr2_controller",
+        package="pr2_mujoco_bridge",
         executable="pr2_ee_pose_publisher",
         name="pr2_ee_pose_publisher",
         output="screen",

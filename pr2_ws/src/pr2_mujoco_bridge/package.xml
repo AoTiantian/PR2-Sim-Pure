@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>pr2_controller</name>
+  <name>pr2_mujoco_bridge</name>
   <version>0.1.0</version>
   <description>PR2 MuJoCo simulation bridge for ROS 2 Jazzy (joint_states, joint commands, cmd_vel).</description>
   <maintainer email="maintainer@example.com">maintainer</maintainer>

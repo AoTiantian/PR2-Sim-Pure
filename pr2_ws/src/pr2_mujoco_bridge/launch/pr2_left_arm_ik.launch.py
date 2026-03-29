@@ -12,7 +12,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     ik_node = Node(
-        package="pr2_controller",
+        package="pr2_mujoco_bridge",
         executable="pr2_left_arm_ik",
         name="pr2_left_arm_ik",
         output="screen",

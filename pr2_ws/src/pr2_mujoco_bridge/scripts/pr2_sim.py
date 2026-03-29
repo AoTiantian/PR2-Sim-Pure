@@ -2,9 +2,9 @@
 直连 MuJoCo 的演示（无 ROS）：在 Python 里直接写 data.ctrl。
 
 若要通过 ROS 2 Jazzy 控制同一模型，请使用已编译包中的节点：
-  ros2 run pr2_controller pr2_mujoco_sim
-  ros2 launch pr2_controller pr2_mujoco_sim.launch.py
-详见包内 README.md（pr2_controller）。
+  ros2 run pr2_mujoco_bridge pr2_mujoco_sim
+  ros2 launch pr2_mujoco_bridge pr2_mujoco_sim.launch.py
+详见包内 README.md（pr2_mujoco_bridge）。
 """
 import mujoco
 import mujoco.viewer

@@ -1,4 +1,4 @@
-# pr2_controller
+# pr2_mujoco_bridge
 
 PR2 在 MuJoCo 中与 **ROS 2 Jazzy** 桥接：发布关节状态与里程计，通过话题控制执行器。
 
@@ -12,16 +12,16 @@ PR2 在 MuJoCo 中与 **ROS 2 Jazzy** 桥接：发布关节状态与里程计，
 ```bash
 cd /workspace/pr2_ws
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select pr2_controller
+colcon build --packages-select pr2_mujoco_bridge
 source install/setup.bash
 ```
 
 ## 运行
 
 ```bash
-ros2 run pr2_controller pr2_mujoco_sim
+ros2 run pr2_mujoco_bridge pr2_mujoco_sim
 # 或
-ros2 launch pr2_controller pr2_mujoco_sim.launch.py
+ros2 launch pr2_mujoco_bridge pr2_mujoco_sim.launch.py
 ```
 
 默认 **`demo_motion:=true`**：与旧版 `scripts/pr2_sim.py` 相同，会自动做夹爪开合、左臂轮换、底盘前后/侧移演示。若**只**想通过话题控制、不要内置动作，请加：
@@ -31,7 +31,7 @@ ros2 launch pr2_controller pr2_mujoco_sim.launch.py
 无头仿真（无窗口）：
 
 ```bash
-ros2 run pr2_controller pr2_mujoco_sim --ros-args -p use_viewer:=false
+ros2 run pr2_mujoco_bridge pr2_mujoco_sim --ros-args -p use_viewer:=false
 ```
 
 ### 故障排除：`Failed to open display` / `could not initialize GLFW`
@@ -73,7 +73,7 @@ ros2 topic pub --once /joint_commands sensor_msgs/msg/JointState \
 
 ## 拟运动学（IK）求解器（新增）
 
-已新增节点：`pr2_left_arm_ik`（文件：`pr2_controller/pr2_left_arm_ik.py`）。
+已新增节点：`pr2_left_arm_ik`（源码：`pr2_mujoco_bridge/pr2_mujoco_bridge/pr2_left_arm_ik.py`）。
 
 功能：
 
@@ -92,7 +92,7 @@ ros2 topic pub --once /joint_commands sensor_msgs/msg/JointState \
 cd /workspace/pr2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run pr2_controller pr2_mujoco_sim --ros-args -p demo_motion:=false
+ros2 run pr2_mujoco_bridge pr2_mujoco_sim --ros-args -p demo_motion:=false
 ```
 
 终端 2（IK）：
@@ -101,9 +101,9 @@ ros2 run pr2_controller pr2_mujoco_sim --ros-args -p demo_motion:=false
 cd /workspace/pr2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run pr2_controller pr2_left_arm_ik
+ros2 run pr2_mujoco_bridge pr2_left_arm_ik
 # 或
-ros2 launch pr2_controller pr2_left_arm_ik.launch.py
+ros2 launch pr2_mujoco_bridge pr2_left_arm_ik.launch.py
 ```
 
 终端 3（发送目标位姿）：
@@ -141,9 +141,9 @@ pose:
 运行：
 
 ```bash
-ros2 run pr2_controller pr2_ee_pose_publisher
+ros2 run pr2_mujoco_bridge pr2_ee_pose_publisher
 # 或
-ros2 launch pr2_controller pr2_ee_pose.launch.py
+ros2 launch pr2_mujoco_bridge pr2_ee_pose.launch.py
 ```
 
 查看：

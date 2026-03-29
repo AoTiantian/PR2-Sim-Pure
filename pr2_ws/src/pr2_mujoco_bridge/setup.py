@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = "pr2_controller"
+package_name = "pr2_mujoco_bridge"
 
 setup(
     name=package_name,
@@ -20,9 +20,9 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "pr2_mujoco_sim = pr2_controller.pr2_sim_ros:main",
-            "pr2_left_arm_ik = pr2_controller.pr2_left_arm_ik:main",
-            "pr2_ee_pose_publisher = pr2_controller.pr2_ee_pose_publisher:main",
+            "pr2_mujoco_sim = pr2_mujoco_bridge.pr2_sim_ros:main",
+            "pr2_left_arm_ik = pr2_mujoco_bridge.pr2_left_arm_ik:main",
+            "pr2_ee_pose_publisher = pr2_mujoco_bridge.pr2_ee_pose_publisher:main",
         ],
     },
 )

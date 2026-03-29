@@ -49,22 +49,22 @@
 ```bash
 cd /workspace/pr2_ws
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select pr2_controller
+colcon build --packages-select pr2_mujoco_bridge
 source install/setup.bash
 ```
 
 终端 1：启动仿真（建议关 demo）
 
 ```bash
-ros2 run pr2_controller pr2_mujoco_sim --ros-args -p demo_motion:=false
+ros2 run pr2_mujoco_bridge pr2_mujoco_sim --ros-args -p demo_motion:=false
 ```
 
 终端 2：启动 IK 节点
 
 ```bash
-ros2 run pr2_controller pr2_left_arm_ik
+ros2 run pr2_mujoco_bridge pr2_left_arm_ik
 # 或
-ros2 launch pr2_controller pr2_left_arm_ik.launch.py
+ros2 launch pr2_mujoco_bridge pr2_left_arm_ik.launch.py
 ```
 
 终端 3：发布目标位姿
@@ -107,9 +107,9 @@ pose:
 启动：
 
 ```bash
-ros2 run pr2_controller pr2_ee_pose_publisher
+ros2 run pr2_mujoco_bridge pr2_ee_pose_publisher
 # 或
-ros2 launch pr2_controller pr2_ee_pose.launch.py
+ros2 launch pr2_mujoco_bridge pr2_ee_pose.launch.py
 ```
 
 查看末端位姿：
@@ -121,5 +121,5 @@ ros2 topic echo /ee_pose
 如果你使用右臂或其他末端，可改参数：
 
 ```bash
-ros2 run pr2_controller pr2_ee_pose_publisher --ros-args -p end_effector_body:=l_gripper_tool_frame
+ros2 run pr2_mujoco_bridge pr2_ee_pose_publisher --ros-args -p end_effector_body:=l_gripper_tool_frame
 ```

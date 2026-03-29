@@ -6,7 +6,7 @@
 
 - **GPU 直通**：支持 NVIDIA 显卡硬件加速（如 RTX 系列）。
 - **一键环境**：使用 VS Code Dev Container，简化驱动与依赖配置。
-- **ROS 2 桥接**：`pr2_controller` 包发布 `joint_states`、`odom`、TF，并订阅 `cmd_vel`、`joint_commands` 等。
+- **ROS 2 桥接**：`pr2_mujoco_bridge` 包发布 `joint_states`、`odom`、TF，并订阅 `cmd_vel`、`joint_commands` 等。
 - **内置演示**：节点默认 `demo_motion:=true`，效果接近旧版纯 Python 脚本（夹爪、左臂、全向底盘周期动作）。
 - **全向底盘**：近似侧移、自旋与手臂力矩/位置控制（详见包内文档）。
 
@@ -41,38 +41,38 @@ cd 你的仓库名
 ```bash
 cd pr2_ws
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select pr2_controller
+colcon build --packages-select pr2_mujoco_bridge
 source install/setup.bash
 
 # 带 MuJoCo 窗口（需可用 DISPLAY）
-ros2 run pr2_controller pr2_mujoco_sim
+ros2 run pr2_mujoco_bridge pr2_mujoco_sim
 
 # 或使用 launch
-ros2 launch pr2_controller pr2_mujoco_sim.launch.py
+ros2 launch pr2_mujoco_bridge pr2_mujoco_sim.launch.py
 ```
 
 **无窗口 / SSH / 无 X11**：
 
 ```bash
-ros2 run pr2_controller pr2_mujoco_sim --ros-args -p use_viewer:=false
+ros2 run pr2_mujoco_bridge pr2_mujoco_sim --ros-args -p use_viewer:=false
 ```
 
 **只要 ROS 控制、不要内置演示动作**：
 
 ```bash
-ros2 run pr2_controller pr2_mujoco_sim --ros-args -p demo_motion:=false
+ros2 run pr2_mujoco_bridge pr2_mujoco_sim --ros-args -p demo_motion:=false
 ```
 
 更完整的话题说明、故障排除与示例命令见：
 
-**[pr2_ws/src/pr2_controller/README.md](pr2_ws/src/pr2_controller/README.md)**
+**[pr2_ws/src/pr2_mujoco_bridge/README.md](pr2_ws/src/pr2_mujoco_bridge/README.md)**
 
 ### 4. 纯 Python 演示（无 ROS）
 
 不启动 ROS、仅直连 MuJoCo 时仍可使用：
 
 ```bash
-python3 pr2_ws/src/pr2_controller/scripts/pr2_sim.py
+python3 pr2_ws/src/pr2_mujoco_bridge/scripts/pr2_sim.py
 ```
 
 ## 项目结构
@@ -80,8 +80,10 @@ python3 pr2_ws/src/pr2_controller/scripts/pr2_sim.py
 | 路径 | 说明 |
 |------|------|
 | `.devcontainer/` | Dev Container / Docker 相关配置 |
-| `pr2_ws/src/pr2_controller/` | ROS 2 功能包：`pr2_sim_ros.py` 节点、`launch/`、`package.xml` |
-| `pr2_ws/src/pr2_controller/scripts/` | 无 ROS 的 `pr2_sim.py` 等脚本 |
+| `pr2_ws/src/pr2_mujoco_bridge/` | ROS 2 功能包 **pr2_mujoco_bridge**（MuJoCo↔ROS 桥、IK、末端位姿等） |
+| `pr2_ws/src/pr2_mujoco_bridge/pr2_mujoco_bridge/` | 同名 Python 子包（`ament_python` 惯例，import 名 `pr2_mujoco_bridge`） |
+| `pr2_ws/src/pr2_mujoco_bridge/scripts/` | 无 ROS 的 `pr2_sim.py` 等脚本 |
+| `src/pr2_ros2_stack/` | 另一套 ROS 2 工程目录（含 `pr2_description`、`pr2_bringup`、`pr2_mujoco_hardware` 等多个子包） |
 | `unitree_mujoco/unitree_robots/pr2/` | MuJoCo MJCF（如 `scene.xml`） |
 | `pr2_description/` | PR2 模型描述与网格等资源（若存在） |
 
