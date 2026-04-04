@@ -151,3 +151,14 @@ ros2 launch pr2_mujoco_bridge pr2_ee_pose.launch.py
 ```bash
 ros2 topic echo /ee_pose
 ```
+
+---
+
+## 移动机械臂控制栈（WBC 占位 + 状态估计）
+
+与 `移动机械臂控制框图.png` 对应：已增加 **状态估计**、**WBC 协调器（占位）**、**底座加速度积分器**、**导纳/零空间桩节点**。
+
+- **总说明与话题表**：[README_WBC_STACK.md](README_WBC_STACK.md)
+- **一键 launch**：`ros2 launch pr2_mujoco_bridge pr2_mobile_manipulator_stack.launch.py`
+
+**新增可执行**：`pr2_state_estimator`、`pr2_wbc_coordinator`、`pr2_base_accel_integrator`、`pr2_admittance_stub`、`pr2_null_space_stub`。

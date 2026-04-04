@@ -8,8 +8,16 @@ setup(
     packages=find_packages(exclude=["test"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
-        ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/launch", ["launch/pr2_mujoco_sim.launch.py", "launch/pr2_left_arm_ik.launch.py", "launch/pr2_ee_pose.launch.py"]),
+        ("share/" + package_name, ["package.xml", "README_WBC_STACK.md"]),
+        (
+            "share/" + package_name + "/launch",
+            [
+                "launch/pr2_mujoco_sim.launch.py",
+                "launch/pr2_left_arm_ik.launch.py",
+                "launch/pr2_ee_pose.launch.py",
+                "launch/pr2_mobile_manipulator_stack.launch.py",
+            ],
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -23,6 +31,11 @@ setup(
             "pr2_mujoco_sim = pr2_mujoco_bridge.pr2_sim_ros:main",
             "pr2_left_arm_ik = pr2_mujoco_bridge.pr2_left_arm_ik:main",
             "pr2_ee_pose_publisher = pr2_mujoco_bridge.pr2_ee_pose_publisher:main",
+            "pr2_state_estimator = pr2_mujoco_bridge.pr2_state_estimator:main",
+            "pr2_wbc_coordinator = pr2_mujoco_bridge.pr2_wbc_coordinator:main",
+            "pr2_base_accel_integrator = pr2_mujoco_bridge.pr2_base_accel_integrator:main",
+            "pr2_admittance_stub = pr2_mujoco_bridge.pr2_admittance_stub:main",
+            "pr2_null_space_stub = pr2_mujoco_bridge.pr2_null_space_stub:main",
         ],
     },
 )

@@ -67,6 +67,18 @@ ros2 run pr2_mujoco_bridge pr2_mujoco_sim --ros-args -p demo_motion:=false
 
 **[pr2_ws/src/pr2_mujoco_bridge/README.md](pr2_ws/src/pr2_mujoco_bridge/README.md)**
 
+### 3.1 移动机械臂控制栈（手绘框图 / WBC 占位）
+
+状态估计、`wbc/reference/*` 参考话题、WBC 协调器（占位）、底座加速度积分器、导纳/零空间桩节点，与 **`移动机械臂控制框图.png`** 对应；详细话题与启动方式见：
+
+**[pr2_ws/src/pr2_mujoco_bridge/README_WBC_STACK.md](pr2_ws/src/pr2_mujoco_bridge/README_WBC_STACK.md)**
+
+一键启动（仿真 + 状态汇总 + WBC 协调器）：
+
+```bash
+ros2 launch pr2_mujoco_bridge pr2_mobile_manipulator_stack.launch.py
+```
+
 ### 4. 纯 Python 演示（无 ROS）
 
 不启动 ROS、仅直连 MuJoCo 时仍可使用：
