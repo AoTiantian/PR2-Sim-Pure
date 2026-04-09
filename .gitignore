@@ -35,3 +35,7 @@ MUJOCO_LOG.TXT
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# --- Local docs / diagrams (user-specific) ---
+/移动机械臂控制框图.pdf
+/项目的核心代码在哪.md

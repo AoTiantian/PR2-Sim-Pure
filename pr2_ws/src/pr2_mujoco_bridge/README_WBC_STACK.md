@@ -2,6 +2,8 @@
 
 本目录实现的是 **可替换占位节点**，用于把「状态估计 → WBC → 底座/臂/夹爪」接到现有 `pr2_mujoco_sim`。**真实 QP 全身控制**需在 `pr2_wbc_coordinator` 内替换为优化求解；当前协调器只负责 **参考汇总与话题对接**。
 
+左臂 IK 节点 `pr2_left_arm_ik` 的算法、参数与调参说明见 **[README_IK.md](README_IK.md)**（与本栈配合时需改 `joint_command_topic`，见下文「IK 接到 WBC」）。
+
 ## 框图 ↔ 节点
 
 | 框图模块 | 节点（可执行名） | 话题 / 说明 |

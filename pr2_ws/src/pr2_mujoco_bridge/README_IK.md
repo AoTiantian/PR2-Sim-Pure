@@ -95,8 +95,15 @@ pose:
 3. **不动**：确认 `pr2_mujoco_sim` 的 `demo_motion=false`，并检查 `ik_target_pose` 是否持续发布。
 4. **姿态误差大**：先设置 `use_orientation=false`，仅位置收敛后再开启姿态。
 
+## 8. 与 WBC 栈配合（可选）
 
-## 8. 监测末端执行器位置（新增）
+若同时运行 **[README_WBC_STACK.md](README_WBC_STACK.md)** 中的 `pr2_wbc_coordinator`，应由协调器汇总后向仿真发布 `cmd_vel` / `joint_commands`。此时 IK 节点**不要**再直接写默认的 `/joint_commands`，应把力矩发布到 `wbc/reference/joint_command`，例如：
+
+```bash
+ros2 run pr2_mujoco_bridge pr2_left_arm_ik --ros-args -p joint_command_topic:=wbc/reference/joint_command
+```
+
+## 9. 监测末端执行器位置（新增）
 
 已新增节点：`pr2_ee_pose_publisher`，用于实时发布末端位姿。
 

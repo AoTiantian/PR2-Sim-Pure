@@ -127,7 +127,7 @@ pose:
 - `torque_kp`、`torque_kd`：将 IK 目标转为力矩命令的 PD 增益
 - `use_orientation`：是否同时跟踪末端姿态（false 时仅跟踪位置）
 
-更详细说明见：`README_IK.md`
+更详细说明见：[README_IK.md](README_IK.md)
 
 
 ## 末端位姿监测（EE Pose）
