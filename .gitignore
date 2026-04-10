@@ -39,3 +39,7 @@ Thumbs.db
 # --- Local docs / diagrams (user-specific) ---
 /移动机械臂控制框图.pdf
 /项目的核心代码在哪.md
+
+# External clones (track only the index README)
+third_party/*
+!third_party/README.md
