@@ -1,12 +1,7 @@
-"""One-command admittance validation launch (no null-space)."""
+"""One-command omni-direction admittance validation preset."""
 
 from launch import LaunchDescription
-from launch.actions import (
-    DeclareLaunchArgument,
-    EmitEvent,
-    RegisterEventHandler,
-    SetEnvironmentVariable,
-)
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler, SetEnvironmentVariable
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
@@ -19,17 +14,15 @@ def generate_launch_description() -> LaunchDescription:
         "model_path",
         default_value="/workspace/unitree_mujoco/unitree_robots/pr2/scene.xml",
     )
-    # Validation reliability is better in headless mode; set true if you need window.
     viewer_arg = DeclareLaunchArgument("use_viewer", default_value="false")
-    force_arg = DeclareLaunchArgument("force_x", default_value="30.0")
-    force_schedule_arg = DeclareLaunchArgument(
-        "force_schedule_json",
-        default_value="",
+
+    # Default schedule: +X -> +Y -> -X -> -Y, each 5s.
+    force_schedule = (
+        '[{"start":2.0,"end":7.0,"fx":80.0},'
+        '{"start":7.0,"end":12.0,"fy":80.0},'
+        '{"start":12.0,"end":17.0,"fx":-80.0},'
+        '{"start":17.0,"end":22.0,"fy":-80.0}]'
     )
-    # duration_sec is the virtual-force active duration.
-    duration_arg = DeclareLaunchArgument("duration_sec", default_value="3.0")
-    force_start_arg = DeclareLaunchArgument("force_start_sec", default_value="2.0")
-    settle_arg = DeclareLaunchArgument("settle_after_sec", default_value="3.0")
 
     sim = Node(
         package="pr2_mujoco_bridge",
@@ -39,11 +32,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[
             {"model_path": LaunchConfiguration("model_path")},
             {"demo_motion": False},
-            {
-                "use_viewer": ParameterValue(
-                    LaunchConfiguration("use_viewer"), value_type=bool
-                )
-            },
+            {"use_viewer": ParameterValue(LaunchConfiguration("use_viewer"), value_type=bool)},
         ],
     )
 
@@ -82,31 +71,8 @@ def generate_launch_description() -> LaunchDescription:
         name="pr2_admittance_validator",
         output="screen",
         parameters=[
-            {
-                "force_x": ParameterValue(
-                    LaunchConfiguration("force_x"), value_type=float
-                )
-            },
-            {
-                "force_schedule_json": ParameterValue(
-                    LaunchConfiguration("force_schedule_json"), value_type=str
-                )
-            },
-            {
-                "force_start_sec": ParameterValue(
-                    LaunchConfiguration("force_start_sec"), value_type=float
-                )
-            },
-            {
-                "duration_sec": ParameterValue(
-                    LaunchConfiguration("duration_sec"), value_type=float
-                )
-            },
-            {
-                "settle_after_sec": ParameterValue(
-                    LaunchConfiguration("settle_after_sec"), value_type=float
-                )
-            },
+            {"force_schedule_json": force_schedule},
+            {"settle_after_sec": 3.0},
         ],
     )
 
@@ -119,11 +85,6 @@ def generate_launch_description() -> LaunchDescription:
             SetEnvironmentVariable("LIBGL_ALWAYS_SOFTWARE", "1"),
             model_arg,
             viewer_arg,
-            force_arg,
-            force_schedule_arg,
-            duration_arg,
-            force_start_arg,
-            settle_arg,
             sim,
             state_est,
             wbc,

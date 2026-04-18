@@ -110,6 +110,14 @@ ros2 run pr2_mujoco_bridge pr2_null_space_stub
 ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py
 ```
 
+如果你不想每次手动 `build + source`，可直接运行仓库内一键脚本：
+
+```bash
+/workspace/pr2_ws/src/pr2_mujoco_bridge/scripts/run_admittance_validation_omni.sh
+```
+
+上面脚本默认调用 `pr2_admittance_validation_omni.launch.py`（预设 +X/+Y/-X/-Y 分段施力）。
+
 该 launch 会自动启动：
 - `pr2_mujoco_sim`（`demo_motion=false`）
 - `pr2_state_estimator`
@@ -123,6 +131,17 @@ ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py
 ```bash
 ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py \
   force_x:=40.0 duration_sec:=6.0 force_start_sec:=2.0 settle_after_sec:=3.0 use_viewer:=false
+
+# 多方向分段施力（验证全向底盘导纳）
+ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py \
+  use_viewer:=false \
+  force_schedule_json:='[
+    {"start":2.0,"end":7.0,"fx":80.0},
+    {"start":7.0,"end":12.0,"fy":80.0},
+    {"start":12.0,"end":17.0,"fx":-80.0},
+    {"start":17.0,"end":22.0,"fy":-80.0}
+  ]' \
+  settle_after_sec:=3.0
 ```
 
 参数含义：
@@ -144,12 +163,14 @@ ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py \
 默认通过阈值（可在节点参数中修改）：
 - `min_peak_accel_x = 0.12`
 - `min_peak_cmd_vx = 0.06`
+- `min_peak_accel_planar = 0.12`（分段多方向模式下使用）
+- `min_peak_cmd_v_planar = 0.06`（分段多方向模式下使用）
 - `min_joint_state_count = 200`（防止仿真节点提前退出仍被误判 PASS）
 
 ### 期望现象（当前验证的是底座导纳链路）
 
-- 注入力期间：底座沿 +x 方向产生加速与速度增长
-- 卸载力后：加速度回落，速度不再继续增大并逐步衰减
+- 单方向模式：注入力期间沿施力方向加速，卸载后加速度回落并衰减
+- 全向分段模式：底座按 `+X -> +Y -> -X -> -Y` 依次响应，方向应随分段切换
 
 > 说明：该自动验证目前只覆盖 **底座导纳链路**（`external_wrench -> base_acceleration -> cmd_vel`）。  
 > 机械臂导纳属于后续扩展项，不在本脚本判据内。

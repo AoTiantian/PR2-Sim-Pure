@@ -36,6 +36,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import rclpy
+import glfw
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.executors import ExternalShutdownException
@@ -455,7 +456,24 @@ class Pr2MujocoSim(Node):
                 if dt > 0:
                     time.sleep(dt)
 
+        def viewer_available() -> bool:
+            # Probe GLFW first to avoid process exit when viewer init fails on X11 auth/display.
+            try:
+                ok = bool(glfw.init())
+                if ok:
+                    glfw.terminate()
+                return ok
+            except Exception:
+                return False
+
         if self._use_viewer:
+            if not viewer_available():
+                self.get_logger().error(
+                    "请求 use_viewer=true，但 GLFW 初始化失败（常见于 DISPLAY/xhost/xauth 未配置）。"
+                    "自动切换为无头模式继续运行。"
+                )
+                run_headless()
+                return
             try:
                 with mujoco.viewer.launch_passive(self._model, self._data) as viewer:
                     self.get_logger().info(

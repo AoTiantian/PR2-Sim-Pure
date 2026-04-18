@@ -17,6 +17,7 @@ setup(
                 "launch/pr2_ee_pose.launch.py",
                 "launch/pr2_mobile_manipulator_stack.launch.py",
                 "launch/pr2_admittance_validation.launch.py",
+                "launch/pr2_admittance_validation_omni.launch.py",
             ],
         ),
     ],
