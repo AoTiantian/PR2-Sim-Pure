@@ -22,6 +22,8 @@ setup(
                 "launch/pr2_arm_force_1d.launch.py",
                 # Phase 2: 单臂 3D 力控
                 "launch/pr2_arm_force_3d.launch.py",
+                # Phase 3: 全身力控
+                "launch/pr2_whole_body_force.launch.py",
             ],
         ),
     ],
@@ -47,6 +49,8 @@ setup(
             # Phase 1: 臂顺应控制
             "pr2_arm_admittance = pr2_mujoco_bridge.pr2_arm_admittance:main",
             "pr2_arm_force_injector = pr2_mujoco_bridge.pr2_arm_force_injector:main",
+            # Phase 3: 全身力控
+            "pr2_force_projector = pr2_mujoco_bridge.pr2_force_projector:main",
         ],
     },
 )
