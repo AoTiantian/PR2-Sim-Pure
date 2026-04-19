@@ -20,6 +20,8 @@ setup(
                 "launch/pr2_admittance_validation_omni.launch.py",
                 # Phase 1: 单臂 X 轴力控
                 "launch/pr2_arm_force_1d.launch.py",
+                # Phase 2: 单臂 3D 力控
+                "launch/pr2_arm_force_3d.launch.py",
             ],
         ),
     ],
