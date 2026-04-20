@@ -71,7 +71,7 @@ def generate_launch_description() -> LaunchDescription:
             "model_path":           model_path,
             "active_axes":          [1, 1, 1],
             "mass_x": 2.0, "mass_y": 2.0, "mass_z": 2.0,
-            "damping_x": 150.0, "damping_y": 150.0, "damping_z": 150.0,
+            "damping_x": 80.0, "damping_y": 80.0, "damping_z": 80.0,
             "control_frequency":    100.0,
             "dls_lambda":           0.08,
             "torque_kp":            300.0,
