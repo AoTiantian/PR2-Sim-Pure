@@ -16,6 +16,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 _DEFAULT_MODEL = "/workspace/unitree_mujoco/unitree_robots/pr2/scene.xml"
 
@@ -84,13 +85,13 @@ def generate_launch_description() -> LaunchDescription:
         name="pr2_arm_force_injector",
         output="screen",
         parameters=[{
-            "force_axis": force_axis,
+            "force_axis": ParameterValue(force_axis, value_type=str),
             "force_magnitude": force_magnitude,
             "step_duration": 3.0,
             "injection_delay": 1.0,
             "log_file": log_file,
             "publish_rate": 100.0,
-            "waveform": waveform,
+            "waveform": ParameterValue(waveform, value_type=str),
         }],
     )
 
