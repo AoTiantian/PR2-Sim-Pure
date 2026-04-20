@@ -57,6 +57,7 @@ class ArmForceInjectorNode(Node):
         self._current_force = np.zeros(3)
         self._start_time: float | None = None
         self._done = False
+        self._pose_received = False   # 等收到首个 pose 后才开始计时
 
         self.create_timer(1.0 / max(rate, 1.0), self._timer_cb)
         self.get_logger().info(
@@ -84,9 +85,16 @@ class ArmForceInjectorNode(Node):
         if self._done:
             return
 
+        # 等待 admittance 节点激活（收到第一个 pose 后）
+        if not self._pose_received:
+            self._publish_wrench(np.zeros(3))   # 保持零力
+            return
+
         now = self.get_clock().now().nanoseconds * 1e-9
         if self._start_time is None:
             self._start_time = now
+            self.get_logger().info(
+                'admittance ready, 开始注入计时')
 
         elapsed = now - self._start_time
         total_dur = self._delay + self._step_dur
@@ -123,6 +131,11 @@ class ArmForceInjectorNode(Node):
 
     def _pose_cb(self, msg: PoseStamped) -> None:
         if self._done:
+            return
+        if not self._pose_received:
+            self._pose_received = True
+        # 只在开始计时后记录
+        if self._start_time is None:
             return
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         self._csv_w.writerow([

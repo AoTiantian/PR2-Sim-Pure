@@ -117,11 +117,25 @@ class ArmAdmittanceNode(Node):
                     abs(self._model.actuator_ctrlrange[a, 1])))
                 self._tau_limits[idx] = lim
 
+        # 所有带 qpos 地址的 1DOF 关节映射（用于同步完整模型状态以获取正确的重力/Jacobian）
+        self._all_joint_qadr = {}
+        self._all_joint_vadr = {}
+        for jid in range(self._model.njnt):
+            jname = mujoco.mj_id2name(self._model, mujoco.mjtObj.mjOBJ_JOINT, jid)
+            if not jname:
+                continue
+            jtype = int(self._model.jnt_type[jid])
+            # 仅处理 1DOF 关节（HINGE / SLIDE）
+            if jtype in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)):
+                self._all_joint_qadr[jname] = int(self._model.jnt_qposadr[jid])
+                self._all_joint_vadr[jname] = int(self._model.jnt_dofadr[jid])
+
         self._ee_vel = np.zeros(3)
         self._f_ext = np.zeros(3)
         self._q_cur = np.zeros(len(self._joints))
         self._qdot_cur = np.zeros(len(self._joints))
         self._q_des = np.zeros(len(self._joints))
+        self._full_state = {}  # name -> (pos, vel)
         self._initialized = False
 
         self._pub_cmd = self.create_publisher(JointState, cmd_topic, 10)
@@ -143,28 +157,29 @@ class ArmAdmittanceNode(Node):
         self._f_ext[2] = msg.wrench.force.z
 
     def _joint_state_cb(self, msg: JointState) -> None:
-        name_to_idx = {n: i for i, n in enumerate(msg.name)}
+        # 保存完整关节状态
+        for i, name in enumerate(msg.name):
+            p = float(msg.position[i]) if i < len(msg.position) else 0.0
+            v = float(msg.velocity[i]) if i < len(msg.velocity) else 0.0
+            self._full_state[name] = (p, v)
+        # 提取受控 7 关节
         for k, jn in enumerate(self._joints):
-            if jn not in name_to_idx:
-                continue
-            idx = name_to_idx[jn]
-            if idx < len(msg.position):
-                self._q_cur[k] = msg.position[idx]
-            if idx < len(msg.velocity):
-                self._qdot_cur[k] = msg.velocity[idx]
-        if not self._initialized:
+            if jn in self._full_state:
+                self._q_cur[k], self._qdot_cur[k] = self._full_state[jn]
+        if not self._initialized and all(j in self._full_state for j in self._joints):
             self._q_des = self._q_cur.copy()
             self._initialized = True
+            self.get_logger().info('初始化完成，q_des = q_cur')
 
     def _control_loop(self) -> None:
         if not self._initialized:
             return
 
-        # 同步 MuJoCo 运动学
-        for k, qadr in enumerate(self._qadr):
-            self._data.qpos[qadr] = self._q_cur[k]
-        for k, vadr in enumerate(self._vadr):
-            self._data.qvel[vadr] = self._qdot_cur[k]
+        # 同步所有已知关节到 MuJoCo，保证重力补偿和 Jacobian 准确
+        for name, (p, v) in self._full_state.items():
+            if name in self._all_joint_qadr:
+                self._data.qpos[self._all_joint_qadr[name]] = p
+                self._data.qvel[self._all_joint_vadr[name]] = v
         mujoco.mj_forward(self._model, self._data)
 
         # 计算平动雅可比 (3 x 7)
