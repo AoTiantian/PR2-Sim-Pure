@@ -110,6 +110,22 @@ class Pr2MujocoSim(Node):
 
         self._model = mujoco.MjModel.from_xml_path(model_path)
         self._data = mujoco.MjData(self._model)
+
+        # 将左臂设置到非奇异初始位形（肘关节弯曲，避免完全伸直的奇异点）
+        _arm_home = {
+            'l_shoulder_pan_joint':    0.40,
+            'l_shoulder_lift_joint':   0.30,
+            'l_upper_arm_roll_joint':  0.00,
+            'l_elbow_flex_joint':     -1.20,
+            'l_forearm_roll_joint':    0.00,
+            'l_wrist_flex_joint':     -0.50,
+            'l_wrist_roll_joint':      0.00,
+        }
+        for _jn, _val in _arm_home.items():
+            _jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, _jn)
+            if _jid >= 0:
+                self._data.qpos[self._model.jnt_qposadr[_jid]] = _val
+        mujoco.mj_forward(self._model, self._data)
         self._nu = int(self._model.nu)
 
         # joint_name -> [(actuator_index, field), ...]

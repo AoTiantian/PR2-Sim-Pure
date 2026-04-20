@@ -211,7 +211,7 @@ class ArmAdmittanceNode(Node):
         # PD 力矩 + 重力补偿
         tau = (self._kp * (self._q_des - self._q_cur)
                - self._kd * self._qdot_cur
-               + tau_bias)
+               - tau_bias)
         tau_lim = np.minimum(self._tau_limits, self._max_torque)
         tau = np.clip(tau, -tau_lim, tau_lim)
 
