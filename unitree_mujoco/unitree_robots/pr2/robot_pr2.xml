@@ -55,64 +55,64 @@
       <body name="fl_caster_rotation_link" pos="0.2246 0.2246 0.0282">
         <inertial pos="0 0 0.07" quat="0.589921 -0.182261 -0.205712 0.759247" mass="3.47308" diaginertia="0.0153925 0.0125446 0.0114568"/>
         <joint name="fl_caster_rotation_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-6.5 6.5" damping="0.1"/>
-        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="caster"/>
+        <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="caster"/>
         <body name="fl_caster_l_wheel_link" pos="0 0.049 0">
           <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568"/>
           <joint name="fl_caster_l_wheel_joint" pos="0 0 0" axis="0 1 0" actuatorfrcrange="-7 7" damping="1"/>
-          <geom type="mesh" group="1" density="0" mesh="wheel"/>
+          <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="wheel"/>
         </body>
         <body name="fl_caster_r_wheel_link" pos="0 -0.049 0">
           <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568"/>
           <joint name="fl_caster_r_wheel_joint" pos="0 0 0" axis="0 1 0" actuatorfrcrange="-7 7" damping="1"/>
-          <geom type="mesh" group="1" density="0" mesh="wheel"/>
+          <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="wheel"/>
         </body>
       </body>
 
       <body name="fr_caster_rotation_link" pos="0.2246 -0.2246 0.0282">
         <inertial pos="0 0 0.07" quat="0.589921 -0.182261 -0.205712 0.759247" mass="3.47308" diaginertia="0.0153925 0.0125446 0.0114568"/>
         <joint name="fr_caster_rotation_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-6.5 6.5" damping="0.1"/>
-        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="caster"/>
+        <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="caster"/>
         <body name="fr_caster_l_wheel_link" pos="0 0.049 0">
           <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568"/>
           <joint name="fr_caster_l_wheel_joint" pos="0 0 0" axis="0 1 0" actuatorfrcrange="-7 7" damping="1"/>
-          <geom type="mesh" group="1" density="0" mesh="wheel"/>
+          <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="wheel"/>
         </body>
         <body name="fr_caster_r_wheel_link" pos="0 -0.049 0">
           <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568"/>
           <joint name="fr_caster_r_wheel_joint" pos="0 0 0" axis="0 1 0" actuatorfrcrange="-7 7" damping="1"/>
-          <geom type="mesh" group="1" density="0" mesh="wheel"/>
+          <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="wheel"/>
         </body>
       </body>
 
       <body name="bl_caster_rotation_link" pos="-0.2246 0.2246 0.0282">
         <inertial pos="0 0 0.07" quat="0.589921 -0.182261 -0.205712 0.759247" mass="3.47308" diaginertia="0.0153925 0.0125446 0.0114568"/>
         <joint name="bl_caster_rotation_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-6.5 6.5" damping="0.1"/>
-        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="caster"/>
+        <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="caster"/>
         <body name="bl_caster_l_wheel_link" pos="0 0.049 0">
           <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568"/>
           <joint name="bl_caster_l_wheel_joint" pos="0 0 0" axis="0 1 0" actuatorfrcrange="-7 7" damping="1"/>
-          <geom type="mesh" group="1" density="0" mesh="wheel"/>
+          <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="wheel"/>
         </body>
         <body name="bl_caster_r_wheel_link" pos="0 -0.049 0">
           <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568"/>
           <joint name="bl_caster_r_wheel_joint" pos="0 0 0" axis="0 1 0" actuatorfrcrange="-7 7" damping="1"/>
-          <geom type="mesh" group="1" density="0" mesh="wheel"/>
+          <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="wheel"/>
         </body>
       </body>
 
       <body name="br_caster_rotation_link" pos="-0.2246 -0.2246 0.0282">
         <inertial pos="0 0 0.07" quat="0.589921 -0.182261 -0.205712 0.759247" mass="3.47308" diaginertia="0.0153925 0.0125446 0.0114568"/>
         <joint name="br_caster_rotation_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-6.5 6.5" damping="0.1"/>
-        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="caster"/>
+        <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="caster"/>
         <body name="br_caster_l_wheel_link" pos="0 0.049 0">
           <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568"/>
           <joint name="br_caster_l_wheel_joint" pos="0 0 0" axis="0 1 0" actuatorfrcrange="-7 7" damping="1"/>
-          <geom type="mesh" group="1" density="0" mesh="wheel"/>
+          <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="wheel"/>
         </body>
         <body name="br_caster_r_wheel_link" pos="0 -0.049 0">
           <inertial pos="0 0 0" quat="0.589921 -0.182261 -0.205712 0.759247" mass="0.44036" diaginertia="0.0153925 0.0125446 0.0114568"/>
           <joint name="br_caster_r_wheel_joint" pos="0 0 0" axis="0 1 0" actuatorfrcrange="-7 7" damping="1"/>
-          <geom type="mesh" group="1" density="0" mesh="wheel"/>
+          <geom type="mesh" contype="1" conaffinity="1" group="1" density="0" mesh="wheel"/>
         </body>
       </body>
 

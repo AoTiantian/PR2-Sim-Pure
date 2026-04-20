@@ -43,3 +43,6 @@ Thumbs.db
 # External clones (track only the index README)
 third_party/*
 !third_party/README.md
+
+# logs
+logs/*

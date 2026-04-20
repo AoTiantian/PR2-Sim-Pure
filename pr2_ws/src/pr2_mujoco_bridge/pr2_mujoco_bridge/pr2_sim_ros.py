@@ -20,6 +20,7 @@ PR2 MuJoCo ↔ ROS 2 桥接节点（Jazzy）。
   cmd_vel_linear_gain / cmd_vel_angular_gain: 底盘速度映射增益
   use_cmd_vel: 若为 false，底盘仅由 /joint_commands 或 /actuator_command 控制
   demo_motion: 为 true 时复现旧版 pr2_sim.py 内置周期动作（夹爪/左臂/底盘）；完全由 ROS 控制时请设为 false
+  lock_base_motion: 为 true 时锁定 base_link 的 free-joint（用于 arm-only 验证）
 
 依赖: pip install mujoco（不在 rosdep 中）
 """
@@ -73,6 +74,13 @@ class Pr2MujocoSim(Node):
         self.declare_parameter("use_cmd_vel", True)
         # 默认开启：打开仿真窗口时能看到与旧 pr2_sim.py 相同的演示动作
         self.declare_parameter("demo_motion", True)
+        self.declare_parameter("lock_base_motion", False)
+        self.declare_parameter("lock_torso_motion", False)
+        self.declare_parameter("lock_base_settle_sec", 0.6)
+        # JSON dict of {joint_name: angle_rad} to set before simulation starts.
+        # Eliminates large initial convergence motions (and the Coriolis disturbances
+        # they cause) when initial_joint_pose targets differ from MuJoCo defaults.
+        self.declare_parameter("initial_qpos_json", "")
         self.declare_parameter("odom_frame", "odom")
         self.declare_parameter("base_frame", "base_link")
 
@@ -103,6 +111,24 @@ class Pr2MujocoSim(Node):
         self._demo_motion = (
             self.get_parameter("demo_motion").get_parameter_value().bool_value
         )
+        self._lock_base_motion = (
+            self.get_parameter("lock_base_motion").get_parameter_value().bool_value
+        )
+        self._lock_torso_motion = (
+            self.get_parameter("lock_torso_motion").get_parameter_value().bool_value
+        )
+        self._lock_base_settle_sec = (
+            self.get_parameter("lock_base_settle_sec").get_parameter_value().double_value
+        )
+        import json as _json
+        _raw_qpos = str(self.get_parameter("initial_qpos_json").value).strip()
+        self._initial_qpos: Dict[str, float] = {}
+        if _raw_qpos:
+            try:
+                self._initial_qpos = {k: float(v) for k, v in _json.loads(_raw_qpos).items()}
+                self.get_logger().info(f"initial_qpos_json 已加载: {self._initial_qpos}")
+            except Exception as e:
+                self.get_logger().warn(f"initial_qpos_json 解析失败: {e}")
         self._odom_frame = (
             self.get_parameter("odom_frame").get_parameter_value().string_value
         )
@@ -175,6 +201,14 @@ class Pr2MujocoSim(Node):
 
         self._prev_base_pos = np.zeros(3)
         self._prev_odom_time = None
+        self._base_free_qadr: int | None = None
+        self._base_free_vadr: int | None = None
+        self._base_lock_qpos: np.ndarray | None = None
+        self._base_lock_pending = False
+        self._torso_qadr: int | None = None
+        self._torso_vadr: int | None = None
+        self._torso_lock_qpos: float | None = None
+        self._torso_lock_pending = False
 
         # 内置演示用执行器（与 scripts/pr2_sim.py 一致，按名称解析）
         self._demo_gripper_l = self._actuator_id_by_name("l_gripper_pos")
@@ -225,9 +259,28 @@ class Pr2MujocoSim(Node):
         )
         self.get_logger().info(
             f"demo_motion={self._demo_motion} | "
+            f"lock_base_motion={self._lock_base_motion} | "
+            f"lock_torso_motion={self._lock_torso_motion} | "
+            f"lock_settle_sec={self._lock_base_settle_sec:.2f} | "
             "订阅: joint_commands, actuator_command, cmd_vel, disable_actuator_override | "
             "发布: joint_states, odom+tf"
         )
+
+        if self._body_base >= 0:
+            for j in range(self._model.njnt):
+                if int(self._model.jnt_type[j]) != int(mujoco.mjtJoint.mjJNT_FREE):
+                    continue
+                if int(self._model.jnt_bodyid[j]) != int(self._body_base):
+                    continue
+                self._base_free_qadr = int(self._model.jnt_qposadr[j])
+                self._base_free_vadr = int(self._model.jnt_dofadr[j])
+                break
+
+        # Find torso_lift_joint for optional locking
+        torso_jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, "torso_lift_joint")
+        if torso_jid >= 0:
+            self._torso_qadr = int(self._model.jnt_qposadr[torso_jid])
+            self._torso_vadr = int(self._model.jnt_dofadr[torso_jid])
 
     def _actuator_id_by_name(self, name: str) -> int:
         i = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
@@ -414,6 +467,25 @@ class Pr2MujocoSim(Node):
     def run(self) -> None:
         mujoco.mj_resetData(self._model, self._data)
 
+        # Apply initial joint positions before the first step so the arm starts
+        # at the desired configuration, avoiding large convergence motions.
+        if self._initial_qpos:
+            for jn, angle in self._initial_qpos.items():
+                jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jn)
+                if jid >= 0:
+                    self._data.qpos[int(self._model.jnt_qposadr[jid])] = float(angle)
+            mujoco.mj_forward(self._model, self._data)
+            self.get_logger().info("initial_qpos_json 已应用到 MuJoCo 初始状态")
+
+        self._base_lock_qpos = None
+        self._base_lock_pending = bool(
+            self._lock_base_motion and self._base_free_qadr is not None
+        )
+        self._torso_lock_qpos = None
+        self._torso_lock_pending = bool(
+            self._lock_torso_motion and self._torso_qadr is not None
+        )
+
         js = JointState()
         js.header.frame_id = self._base_frame
 
@@ -437,6 +509,39 @@ class Pr2MujocoSim(Node):
 
             self._data.ctrl[:] = ctrl
             mujoco.mj_step(self._model, self._data)
+            if self._data.time >= self._lock_base_settle_sec:
+                if self._base_lock_pending and self._base_free_qadr is not None:
+                    q0 = self._base_free_qadr
+                    self._base_lock_qpos = np.array(
+                        self._data.qpos[q0 : q0 + 7], dtype=np.float64
+                    )
+                    self._base_lock_pending = False
+                if self._torso_lock_pending and self._torso_qadr is not None:
+                    self._torso_lock_qpos = float(self._data.qpos[self._torso_qadr])
+                    self._torso_lock_pending = False
+            needs_forward = False
+            if (
+                self._lock_base_motion
+                and self._base_lock_qpos is not None
+                and self._base_free_qadr is not None
+                and self._base_free_vadr is not None
+            ):
+                q0 = self._base_free_qadr
+                v0 = self._base_free_vadr
+                self._data.qpos[q0 : q0 + 7] = self._base_lock_qpos
+                self._data.qvel[v0 : v0 + 6] = 0.0
+                needs_forward = True
+            if (
+                self._lock_torso_motion
+                and self._torso_lock_qpos is not None
+                and self._torso_qadr is not None
+                and self._torso_vadr is not None
+            ):
+                self._data.qpos[self._torso_qadr] = self._torso_lock_qpos
+                self._data.qvel[self._torso_vadr] = 0.0
+                needs_forward = True
+            if needs_forward:
+                mujoco.mj_forward(self._model, self._data)
 
             stamp = self.get_clock().now().to_msg()
             js.header.stamp = stamp

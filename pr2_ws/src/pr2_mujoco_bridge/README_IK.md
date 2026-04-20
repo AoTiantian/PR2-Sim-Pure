@@ -103,7 +103,25 @@ pose:
 ros2 run pr2_mujoco_bridge pr2_left_arm_ik --ros-args -p joint_command_topic:=wbc/reference/joint_command
 ```
 
-## 9. 监测末端执行器位置（新增）
+## 9. 与左臂笛卡尔导纳链路配合
+
+左臂笛卡尔导纳新增节点 `pr2_arm_admittance_controller`，流程为：
+
+`wbc/arm_external_wrench -> ik_target_pose -> pr2_left_arm_ik -> wbc/reference/joint_command`
+
+建议参数（由验证 launch 已默认设置）：
+
+- `pr2_left_arm_ik`：`use_orientation=false`（先稳定位置导纳）
+- `joint_command_topic=wbc/reference/joint_command`（避免绕过协调器）
+- `target_topic=ik_target_pose`
+
+一键验证请直接使用：
+
+```bash
+/workspace/pr2_ws/src/pr2_mujoco_bridge/scripts/run_arm_admittance_validation.sh
+```
+
+## 10. 监测末端执行器位置（新增）
 
 已新增节点：`pr2_ee_pose_publisher`，用于实时发布末端位姿。
 

@@ -172,5 +172,82 @@ ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py \
 - 单方向模式：注入力期间沿施力方向加速，卸载后加速度回落并衰减
 - 全向分段模式：底座按 `+X -> +Y -> -X -> -Y` 依次响应，方向应随分段切换
 
-> 说明：该自动验证目前只覆盖 **底座导纳链路**（`external_wrench -> base_acceleration -> cmd_vel`）。  
-> 机械臂导纳属于后续扩展项，不在本脚本判据内。
+> 说明：上面这套自动验证只覆盖 **底座导纳链路**（`external_wrench -> base_acceleration -> cmd_vel`）。  
+> 左臂导纳验证请使用下方“左臂笛卡尔导纳（一键验证）”章节。
+
+## 左臂笛卡尔导纳（一键验证）
+
+已新增左臂笛卡尔导纳链路：
+
+- `pr2_arm_admittance_controller`：`wbc/arm_external_wrench + ee_pose -> ik_target_pose`
+- `pr2_left_arm_ik`：`ik_target_pose -> wbc/reference/joint_command`（由协调器汇总后输出）
+- `pr2_arm_admittance_validator`：默认一维 `+X` 施力并统计末端位移/左臂力矩峰值（位移默认与控制同为 `odom` 坐标）
+
+左臂导纳控制器已支持 `WrenchStamped.frame_id` 的坐标系变换（默认开启），会把外力从输入坐标系转换到控制坐标系后再计算导纳。当前验证 launch 已把施力、控制、位移判据统一到 `odom`，并在启动日志中打印三元组 `frames(force, disp, control)`。若 `ee_pose` 坐标系与导纳目标坐标系不一致，控制器会抑制输出并告警（`strict_frame_consistency=true`）。
+另外，验证 launch 默认开启 `pr2_mujoco_sim.lock_base_motion=true` 与 `use_cmd_vel=false`，用于 arm-only 测试时固定底座并关闭底盘速度通道，减少耦合干扰；并新增 `lock_base_settle_sec`，会先让底座自然落稳再锁定，避免“悬空锁死”。
+
+推荐一键脚本（自动 `build + source + launch`）：
+
+```bash
+/workspace/pr2_ws/src/pr2_mujoco_bridge/scripts/run_arm_admittance_validation.sh
+```
+
+等价 launch：
+
+```bash
+ros2 launch pr2_mujoco_bridge pr2_arm_admittance_validation.launch.py
+```
+
+默认是最简单的一维验证（`force_x` step）：
+
+```bash
+ros2 launch pr2_mujoco_bridge pr2_arm_admittance_validation.launch.py \
+  force_x:=30.0 duration_sec:=6.0 force_start_sec:=2.0 \
+  settle_after_sec:=3.0 use_viewer:=false
+```
+
+如需后续扩展到多方向，才传 `force_schedule_json`（非空时会覆盖单步模式）。
+
+两组回归命令建议固定如下：
+
+```bash
+# 组 A：标准 x 向验证
+ros2 launch pr2_mujoco_bridge pr2_arm_admittance_validation.launch.py \
+  force_x:=30.0 force_start_sec:=2.0 duration_sec:=6.0 settle_after_sec:=3.0 \
+  use_viewer:=false
+
+# 组 B：提高激励幅值（观察耦合上界）
+ros2 launch pr2_mujoco_bridge pr2_arm_admittance_validation.launch.py \
+  force_x:=45.0 force_start_sec:=2.0 duration_sec:=6.0 settle_after_sec:=3.0 \
+  use_viewer:=false
+```
+
+建议先跑一条零力稳定性基线（应无明显自激振荡）：
+
+```bash
+ros2 launch pr2_mujoco_bridge pr2_arm_admittance_validation.launch.py \
+  force_x:=0.0 duration_sec:=3.0 force_start_sec:=2.0 settle_after_sec:=1.0 use_viewer:=false
+```
+
+### 左臂导纳验收指标（默认）
+
+- `peak|disp_xy| >= min_peak_disp_xy`（默认 `0.0 m`，禁用；可手动开启）
+- `peak|disp_xyz| >= min_peak_disp_xyz`（默认 `0.012 m`）
+- `peak|disp_xy| <= max_peak_disp_xy`（默认 `0.25 m`，抑制大幅过冲）
+- `peak|disp_xyz| <= max_peak_disp_xyz`（默认 `0.30 m`，抑制大幅过冲）
+- `peak|disp_z| <= max_peak_disp_z`（默认 `0.015 m`，约束 x 向测试中的 z 串扰）
+- `peak|left_effort| <= max_allowed_left_effort`（默认 `120 Nm`）
+- `settle_time <= max_settle_time_sec`（默认 `2.0 s`）
+- `rms_disp_after_settle <= max_rms_disp_after_settle`（默认 `0.02 m`）
+- `effort_rms_after_settle <= max_effort_rms_after_settle`（默认 `20 Nm`）
+- `joint_states_count >= min_joint_state_count`（默认 `200`，防止仿真提前退出误判）
+
+默认基线锁定策略：`baseline_latch_mode=at_force_start`（在施力开始时锁定位姿基线，排除启动瞬态）。
+
+### 调参顺序（建议）
+
+1. **先稳**：提高 `damping_linear`、减小 `max_linear_displacement` / `max_linear_velocity`
+2. **再灵敏**：逐步降低 `damping_linear` 或 `mass_linear`
+3. **最后边界**：增大一维施力（`force_x`），确认位移限幅和力矩上限都能生效
+
+> 当前 `pr2_arm_admittance_validation.launch.py` 默认已使用“稳态优先”参数（导纳与 IK 都更保守），用于减少剧烈抖动与过冲。
