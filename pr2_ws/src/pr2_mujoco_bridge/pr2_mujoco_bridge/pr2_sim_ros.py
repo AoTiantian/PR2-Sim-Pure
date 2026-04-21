@@ -112,16 +112,16 @@ class Pr2MujocoSim(Node):
         self._data = mujoco.MjData(self._model)
 
         # 将左臂设置到非奇异初始位形（肘关节弯曲，避免完全伸直的奇异点）
-        _arm_home = {
+        self._arm_home = {
             'l_shoulder_pan_joint':    0.40,
             'l_shoulder_lift_joint':   0.30,
-            'l_upper_arm_roll_joint':  0.00,
+            'l_upper_arm_roll_joint':  0.50,  # 0.5 gives margin from lower limit (range [0,3.9])
             'l_elbow_flex_joint':     -1.20,
             'l_forearm_roll_joint':    0.00,
             'l_wrist_flex_joint':     -0.50,
             'l_wrist_roll_joint':      0.00,
         }
-        for _jn, _val in _arm_home.items():
+        for _jn, _val in self._arm_home.items():
             _jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, _jn)
             if _jid >= 0:
                 self._data.qpos[self._model.jnt_qposadr[_jid]] = _val
@@ -427,6 +427,13 @@ class Pr2MujocoSim(Node):
 
     def run(self) -> None:
         mujoco.mj_resetData(self._model, self._data)
+        # Re-apply arm home positions after reset (mj_resetData clears qpos to 0,
+        # which puts the elbow at full extension — a kinematic singularity).
+        for _jn, _val in self._arm_home.items():
+            _jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, _jn)
+            if _jid >= 0:
+                self._data.qpos[self._model.jnt_qposadr[_jid]] = _val
+        mujoco.mj_forward(self._model, self._data)
 
         js = JointState()
         js.header.frame_id = self._base_frame

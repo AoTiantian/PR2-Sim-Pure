@@ -105,7 +105,9 @@ def plot_response(d: dict, title: str, save: str | None) -> None:
     if save:
         plt.savefig(save, dpi=150, bbox_inches="tight")
         print(f"图像已保存至 {save}")
-    plt.show()
+        plt.close()
+    else:
+        plt.show()
 
 
 def main() -> None:

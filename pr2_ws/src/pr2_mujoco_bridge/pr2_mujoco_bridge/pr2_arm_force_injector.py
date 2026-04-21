@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import csv
 
-from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+from rcl_interfaces.msg import ParameterDescriptor
 import os
 import time
 
@@ -24,20 +24,21 @@ class ArmForceInjectorNode(Node):
     def __init__(self) -> None:
         super().__init__("pr2_arm_force_injector")
 
-        self.declare_parameter("force_axis", "x",
-            ParameterDescriptor(type=ParameterType.PARAMETER_STRING))  # x/y/z (avoid YAML bool parsing)
-        self.declare_parameter("force_magnitude", 10.0)     # N
-        self.declare_parameter("step_duration", 3.0)        # s
-        self.declare_parameter("injection_delay", 1.0)      # s, 等待仿真稳定
+        _dyn = ParameterDescriptor(dynamic_typing=True)
+        self.declare_parameter("force_axis", "x", _dyn)   # x/y/z; dynamic_typing accepts YAML bool coercion
+        self.declare_parameter("force_magnitude", 10.0)
+        self.declare_parameter("step_duration", 3.0)
+        self.declare_parameter("injection_delay", 1.0)
         self.declare_parameter("log_file", "/tmp/arm_response.csv")
-        self.declare_parameter("publish_rate", 100.0)       # Hz
-        self.declare_parameter("waveform", "step",
-            ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
-        self.declare_parameter("sine_freq", 0.5)            # Hz
+        self.declare_parameter("publish_rate", 100.0)
+        self.declare_parameter("waveform", "step", _dyn)
+        self.declare_parameter("sine_freq", 0.5)
         self.declare_parameter("wrench_topic", "wbc/arm/external_wrench")
         self.declare_parameter("ee_pose_topic", "wbc/arm/ee_pose_log")
 
-        self._axis = str(self.get_parameter("force_axis").value).lower()
+        # YAML 1.1 converts 'y'/'yes'→True, 'n'/'no'→False; coerce back to axis chars
+        _axis_raw = self.get_parameter("force_axis").value
+        self._axis = "y" if _axis_raw is True else str(_axis_raw).lower()
         self._magnitude = float(self.get_parameter("force_magnitude").value)
         self._step_dur = float(self.get_parameter("step_duration").value)
         self._delay = float(self.get_parameter("injection_delay").value)

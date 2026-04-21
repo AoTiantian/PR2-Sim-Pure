@@ -39,14 +39,16 @@ class ArmAdmittanceNode(Node):
         self.declare_parameter("mass_x", 2.0)
         self.declare_parameter("mass_y", 2.0)
         self.declare_parameter("mass_z", 2.0)
-        self.declare_parameter("damping_x", 20.0)
-        self.declare_parameter("damping_y", 20.0)
-        self.declare_parameter("damping_z", 20.0)
+        self.declare_parameter("damping_x", 100.0)
+        self.declare_parameter("damping_y", 100.0)
+        self.declare_parameter("damping_z", 100.0)
         self.declare_parameter("control_frequency", 100.0)
-        self.declare_parameter("dls_lambda", 0.08)
-        self.declare_parameter("torque_kp", 120.0)
-        self.declare_parameter("torque_kd", 15.0)
-        self.declare_parameter("max_torque", 50.0)
+        self.declare_parameter("dls_lambda", 0.15)
+        self.declare_parameter("ee_vel_max", 0.06)     # m/s, EE velocity saturation
+        self.declare_parameter("qdot_des_max", 0.4)   # rad/s, joint velocity saturation
+        self.declare_parameter("torque_kp", 0.0)    # position gain (0 = velocity-servo mode)
+        self.declare_parameter("torque_kd", 50.0)  # velocity bandwidth K [rad/s]: τ = τ_bias + M(q)*K*Δqdot
+        self.declare_parameter("max_torque", 60.0)
         self.declare_parameter("wrench_topic", "wbc/arm/external_wrench")
         self.declare_parameter("joint_command_topic", "joint_commands")
         self.declare_parameter("ee_pose_topic", "wbc/arm/ee_pose_log")
@@ -72,6 +74,8 @@ class ArmAdmittanceNode(Node):
         hz = float(self.get_parameter("control_frequency").value)
         self._dt = 1.0 / max(hz, 1.0)
         self._lam = float(self.get_parameter("dls_lambda").value)
+        self._ee_vel_max = float(self.get_parameter("ee_vel_max").value)
+        self._qdot_des_max = float(self.get_parameter("qdot_des_max").value)
         self._kp = float(self.get_parameter("torque_kp").value)
         self._kd = float(self.get_parameter("torque_kd").value)
         self._max_torque = float(self.get_parameter("max_torque").value)
@@ -134,9 +138,10 @@ class ArmAdmittanceNode(Node):
         self._f_ext = np.zeros(3)
         self._q_cur = np.zeros(len(self._joints))
         self._qdot_cur = np.zeros(len(self._joints))
-        self._q_des = np.zeros(len(self._joints))
+        self._q_des = np.zeros(len(self._joints))  # used only when kp > 0
         self._full_state = {}  # name -> (pos, vel)
         self._initialized = False
+        self._q_dot_des = np.zeros(len(self._joints))
 
         self._pub_cmd = self.create_publisher(JointState, cmd_topic, 10)
         self._pub_pose = self.create_publisher(PoseStamped, pose_topic, 10)
@@ -194,24 +199,50 @@ class ArmAdmittanceNode(Node):
         a_ee = (f - self._D * self._ee_vel) / np.maximum(self._M, 1e-6)
         self._ee_vel += a_ee * self._dt
 
+        # EE velocity saturation — prevents blow-up near singularities
+        ee_vel_norm = np.linalg.norm(self._ee_vel)
+        if ee_vel_norm > self._ee_vel_max:
+            self._ee_vel = self._ee_vel * (self._ee_vel_max / ee_vel_norm)
+
         # DLS IK: q_dot = J^T (J J^T + lambda^2 I)^{-1} * v_ee
         JJT = J @ J.T
         reg = (self._lam ** 2) * np.eye(3, dtype=np.float64)
-        q_dot_des = J.T @ np.linalg.solve(JJT + reg, self._ee_vel)
+        self._q_dot_des = J.T @ np.linalg.solve(JJT + reg, self._ee_vel)
 
-        # 积分期望关节位置，限位
-        self._q_des = np.clip(
-            self._q_des + q_dot_des * self._dt,
-            np.array(self._qmin), np.array(self._qmax))
+        # Joint velocity saturation
+        self._q_dot_des = np.clip(
+            self._q_dot_des, -self._qdot_des_max, self._qdot_des_max)
 
-        # 重力/偏置补偿（mj_forward 已更新 qfrc_bias）
+        # Joint limit protection: smoothly zero velocity as joints approach limits
+        _MARGIN = 0.08  # rad — start scaling back within 0.08 rad of limit
+        for i in range(len(self._joints)):
+            q, qmin, qmax = self._q_cur[i], self._qmin[i], self._qmax[i]
+            if qmax > qmin:
+                if q < qmin + _MARGIN and self._q_dot_des[i] < 0:
+                    self._q_dot_des[i] *= max(0.0, (q - qmin) / _MARGIN)
+                elif q > qmax - _MARGIN and self._q_dot_des[i] > 0:
+                    self._q_dot_des[i] *= max(0.0, (qmax - q) / _MARGIN)
+
+        # 当 kp > 0 时保留位置轨迹积分（仅辅助）
+        if self._kp > 0.0:
+            self._q_des = np.clip(
+                self._q_des + self._q_dot_des * self._dt,
+                np.array(self._qmin), np.array(self._qmax))
+
+        # 重力补偿（mj_forward 已更新 qfrc_bias）
         tau_bias = np.array(
             [self._data.qfrc_bias[v] for v in self._vadr], dtype=np.float64)
 
-        # PD 力矩 + 重力补偿
-        tau = (self._kp * (self._q_des - self._q_cur)
-               - self._kd * self._qdot_cur
-               - tau_bias)
+        # Computed-torque PD controller:
+        #   τ = τ_bias + M_arm(q) · (K_bw·Δqdot + Kp·Δq)
+        # Full inertia matrix gives uniform bandwidth K_bw for all joints.
+        # Stability: K_bw·dt < 2 and Kp·dt² < K_bw·dt (K_bw=50, Kp=10, dt=0.01 ✓).
+        M_full = np.zeros((self._model.nv, self._model.nv), dtype=np.float64)
+        mujoco.mj_fullM(self._model, M_full, self._data.qM)
+        M_arm = M_full[np.ix_(self._vadr, self._vadr)]
+        delta_qdot = self._q_dot_des - self._qdot_cur
+        delta_q = self._q_des - self._q_cur if self._kp > 0.0 else np.zeros(len(self._joints))
+        tau = tau_bias + M_arm @ (self._kd * delta_qdot + self._kp * delta_q)
         tau_lim = np.minimum(self._tau_limits, self._max_torque)
         tau = np.clip(tau, -tau_lim, tau_lim)
 
