@@ -244,6 +244,7 @@ class Pr2MotionLogger(Node):
             "cmd_vx", "cmd_vy", "cmd_vz", "cmd_wx", "cmd_wy", "cmd_wz",
             "base_latched",
             "ee_speed_lin_est",
+            "ee_vx_est", "ee_vy_est", "ee_vz_est",
             "age_joint_states_sec",
             "stale_joint_states",
             "age_cart_vel_sec",
@@ -401,6 +402,9 @@ class Pr2MotionLogger(Node):
         ros = now.nanoseconds * 1e-9
 
         ee_speed_lin = nan
+        ee_vx = nan
+        ee_vy = nan
+        ee_vz = nan
         if self._ee is not None:
             p = self._ee.pose.position
             q = self._ee.pose.orientation
@@ -411,6 +415,9 @@ class Pr2MotionLogger(Node):
                 if dt > 1e-6:
                     ox, oy, oz = self._log_prev_ee_pos
                     ee_speed_lin = math.hypot(cur[0] - ox, cur[1] - oy, cur[2] - oz) / dt
+                    ee_vx = (cur[0] - ox) / dt
+                    ee_vy = (cur[1] - oy) / dt
+                    ee_vz = (cur[2] - oz) / dt
             self._log_prev_ros_t = ros
             self._log_prev_ee_pos = cur
         else:
@@ -436,7 +443,7 @@ class Pr2MotionLogger(Node):
             dyn_row.append(self._jact.get(jn, nan))
 
         stale_extra = self._stale_cols(now)
-        extra = [float(self._base_latched), ee_speed_lin] + stale_extra
+        extra = [float(self._base_latched), ee_speed_lin, ee_vx, ee_vy, ee_vz] + stale_extra
         dbg = self._adm_wrench + self._adm_dx
         row = [wall, ros] + ee_row + tgt_row + self._wrench + self._cart_vel + extra + dbg + dyn_row + joint_row
         self._writer.writerow([f"{v:.6f}" if not math.isnan(v) else "nan" for v in row])

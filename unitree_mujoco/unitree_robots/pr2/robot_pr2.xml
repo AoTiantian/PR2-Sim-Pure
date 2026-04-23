@@ -418,8 +418,8 @@
     <motor name="r_wrist_roll_tau"     joint="r_wrist_roll_joint" gear="1" ctrllimited="true" ctrlrange="-10 10"/>
 
     <!-- Left arm: switch to velocity actuators (pure velocity-bottom mode). -->
-    <velocity name="l_shoulder_pan_vel"   joint="l_shoulder_pan_joint"   kv="30" ctrllimited="true" ctrlrange="-8 8"/>
-    <velocity name="l_shoulder_lift_vel"  joint="l_shoulder_lift_joint"  kv="50" ctrllimited="true" ctrlrange="-8 8"/>
+    <velocity name="l_shoulder_pan_vel"   joint="l_shoulder_pan_joint"   kv="50" ctrllimited="true" ctrlrange="-8 8"/>
+    <velocity name="l_shoulder_lift_vel"  joint="l_shoulder_lift_joint"  kv="100" ctrllimited="true" ctrlrange="-8 8"/>
     <velocity name="l_upper_arm_roll_vel" joint="l_upper_arm_roll_joint" kv="12" ctrllimited="true" ctrlrange="-10 10"/>
     <velocity name="l_elbow_flex_vel"     joint="l_elbow_flex_joint"     kv="40" ctrllimited="true" ctrlrange="-8 8"/>
     <velocity name="l_forearm_roll_vel"   joint="l_forearm_roll_joint"   kv="10" ctrllimited="true" ctrlrange="-12 12"/>

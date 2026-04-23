@@ -139,6 +139,10 @@ def generate_launch_description() -> LaunchDescription:
             {"use_orientation": False},
             {"require_odom_sync": True},
             {"state_timeout_sec": 0.20},
+            # Keep a joint-space hold loop always-on (superposed with admittance) to resist gravity
+            # in velocity-bottom mode. See pr2_left_arm_ik pre_command_hold_kp.
+            {"pre_command_hold_kp": 2.0},
+            {"pre_command_hold_kd": 0.8},
             {"initial_joint_pose_json": (
                 '{"l_shoulder_pan_joint":0.0,'
                 '"l_shoulder_lift_joint":0.0,'

@@ -99,6 +99,9 @@ class Pr2LeftArmIk(Node):
         # When no Cartesian velocity command is available, hold at initial_joint_pose_json
         # by commanding joint velocities q̇ = k * (q_init - q). 0 disables this hold.
         self.declare_parameter("pre_command_hold_kp", 6.0)
+        # Optional D term for the hold loop (velocity feedback): q̇_hold = Kp(q_ref-q) - Kd q̇.
+        # Helps damp oscillations in velocity-bottom mode.
+        self.declare_parameter("pre_command_hold_kd", 0.8)
         # Per-joint Kp/Kd scale factors as JSON {joint_name: scale}.
         # Wrist/forearm roll joints have small inertia; lower scale prevents oscillation.
         # Default: forearm_roll=0.25, wrist_flex=0.4, wrist_roll=0.25
@@ -270,7 +273,11 @@ class Pr2LeftArmIk(Node):
         self._vel_sync_alpha = float(np.clip(self.get_parameter("velocity_sync_alpha").value, 0.0, 1.0))
         self._max_joint_vel_rad_s = float(self.get_parameter("max_joint_velocity_rad_s").value)
         self._pre_hold_kp = max(0.0, float(self.get_parameter("pre_command_hold_kp").value))
+        self._pre_hold_kd = max(0.0, float(self.get_parameter("pre_command_hold_kd").value))
         self._last_qdot_scale_warn_ns = 0
+        self._last_qdot_diag_info_ns = 0
+        self._last_qdot_scale: float = 1.0
+        self._last_qdot_peak_rad_s: float = 0.0
         self._cart_vel_cmd: np.ndarray | None = None
         self._t_cart_vel = self.get_clock().now()
         self._q_integrated: np.ndarray | None = None
@@ -447,11 +454,16 @@ class Pr2LeftArmIk(Node):
         """If any |q̇_i| exceeds max_joint_velocity_rad_s, scale entire vector uniformly."""
         lim = self._max_joint_vel_rad_s
         if lim <= 0.0 or qdot.size == 0:
+            self._last_qdot_scale = 1.0
+            self._last_qdot_peak_rad_s = 0.0
             return qdot
         peak = float(np.max(np.abs(qdot)))
+        self._last_qdot_peak_rad_s = peak
         if peak <= lim + 1e-12:
+            self._last_qdot_scale = 1.0
             return qdot
         scale = lim / peak
+        self._last_qdot_scale = scale
         now_ns = self.get_clock().now().nanoseconds
         if now_ns - self._last_qdot_scale_warn_ns > 2_000_000_000:
             self.get_logger().warn(
@@ -460,6 +472,30 @@ class Pr2LeftArmIk(Node):
             )
             self._last_qdot_scale_warn_ns = now_ns
         return qdot * scale
+
+    def _compute_qdot_hold_if_possible(self) -> np.ndarray | None:
+        """Joint-space hold velocity q̇_hold = K * (q_ref - q_cur). Returns None if unavailable."""
+        if self._pre_hold_kp <= 0.0 or (not self._initial_joint_pose):
+            return None
+        if not self._is_fresh(self._t_joint_state):
+            return None
+        q_cur = np.array(
+            [self._joint_state_pos.get(jn, 0.0) for jn in self._controlled_joints],
+            dtype=np.float64,
+        )
+        q_vel = np.array(
+            [self._joint_state_vel.get(jn, 0.0) for jn in self._controlled_joints],
+            dtype=np.float64,
+        )
+        q_ref = np.array(
+            [
+                self._initial_joint_pose.get(jn, q_cur[i])
+                for i, jn in enumerate(self._controlled_joints)
+            ],
+            dtype=np.float64,
+        )
+        qdot_hold = self._pre_hold_kp * (q_ref - q_cur) - self._pre_hold_kd * q_vel
+        return qdot_hold
 
     def _on_timer(self) -> None:
         if self._control_mode == "velocity_tracking":
@@ -582,43 +618,31 @@ class Pr2LeftArmIk(Node):
         dt = 1.0 / self._ctrl_hz
         zero_qdot = np.zeros(len(self._controlled_joints), dtype=np.float64)
 
-        def publish_hold_if_possible() -> bool:
-            if self._pre_hold_kp <= 0.0 or (not self._initial_joint_pose):
-                return False
-            if not self._is_fresh(self._t_joint_state):
-                return False
-            q_cur = np.array(
-                [self._joint_state_pos.get(jn, 0.0) for jn in self._controlled_joints],
-                dtype=np.float64,
-            )
-            q_tgt = np.array(
-                [
-                    self._initial_joint_pose.get(jn, q_cur[i])
-                    for i, jn in enumerate(self._controlled_joints)
-                ],
-                dtype=np.float64,
-            )
-            qdot_hold = self._pre_hold_kp * (q_tgt - q_cur)
-            qdot_hold = self._uniformly_scale_qdot_cmd(qdot_hold)
-            self._publish_velocity(qdot_hold)
-            return True
-
         # Treat near-zero Twist as "no command" and keep holding initial pose.
         cmd_norm = float(np.linalg.norm(self._cart_vel_cmd)) if self._cart_vel_cmd is not None else 0.0
         cmd_effective = (self._cart_vel_cmd is not None) and (cmd_norm > self._vel_cmd_min_norm)
+        qdot_hold_raw = self._compute_qdot_hold_if_possible()
 
         # Pre-command hold: do not require odom/model state, only joint_states.
         if not cmd_effective:
-            if publish_hold_if_possible():
+            if qdot_hold_raw is not None:
+                self._publish_velocity(self._uniformly_scale_qdot_cmd(qdot_hold_raw))
                 return
             self._publish_velocity(zero_qdot)
             return
 
         if not self._is_fresh(self._t_joint_state):
-            self._publish_velocity(zero_qdot)
+            # Prefer holding (if available) over zero command.
+            if qdot_hold_raw is not None:
+                self._publish_velocity(self._uniformly_scale_qdot_cmd(qdot_hold_raw))
+            else:
+                self._publish_velocity(zero_qdot)
             return
         if not self._build_model_state_from_joint_states():
-            self._publish_velocity(zero_qdot)
+            if qdot_hold_raw is not None:
+                self._publish_velocity(self._uniformly_scale_qdot_cmd(qdot_hold_raw))
+            else:
+                self._publish_velocity(zero_qdot)
             return
 
         q_cur = np.array([self._joint_state_pos[jn] for jn in self._controlled_joints], dtype=np.float64)
@@ -640,20 +664,39 @@ class Pr2LeftArmIk(Node):
 
         vel_age = (self.get_clock().now() - self._t_cart_vel).nanoseconds * 1e-9
         if (not cmd_effective) or vel_age > self._vel_cmd_timeout:
-            if publish_hold_if_possible():
-                return
-            self._publish_velocity(zero_qdot)
+            if qdot_hold_raw is not None:
+                self._publish_velocity(self._uniformly_scale_qdot_cmd(qdot_hold_raw))
+            else:
+                self._publish_velocity(zero_qdot)
             return
 
         if self._require_odom_sync and not self._is_fresh(self._t_odom):
-            if publish_hold_if_possible():
-                return
-            self._publish_velocity(zero_qdot)
+            if qdot_hold_raw is not None:
+                self._publish_velocity(self._uniformly_scale_qdot_cmd(qdot_hold_raw))
+            else:
+                self._publish_velocity(zero_qdot)
             return
 
         # Fresh command: compute and publish joint velocity.
         qdot_raw = self._compute_qdot_from_cartesian_vel(self._cart_vel_cmd)
-        qdot_cmd = self._uniformly_scale_qdot_cmd(qdot_raw)
+        if qdot_hold_raw is None:
+            qdot_total = qdot_raw
+        else:
+            qdot_total = qdot_hold_raw + qdot_raw
+        qdot_cmd = self._uniformly_scale_qdot_cmd(qdot_total)
+        now_ns = self.get_clock().now().nanoseconds
+        if now_ns - self._last_qdot_diag_info_ns > 2_000_000_000:
+            hold_norm = float(np.linalg.norm(qdot_hold_raw)) if qdot_hold_raw is not None else 0.0
+            adm_norm = float(np.linalg.norm(qdot_raw))
+            tot_norm = float(np.linalg.norm(qdot_total))
+            cmd_vz = float(self._cart_vel_cmd[2]) if self._cart_vel_cmd is not None else 0.0
+            self.get_logger().info(
+                "velocity_tracking diag: "
+                f"cmd_vz={cmd_vz:.3f} m/s, "
+                f"qdot_scale={self._last_qdot_scale:.4f}, peak_qdot={self._last_qdot_peak_rad_s:.3f} rad/s, "
+                f"||qdot|| hold={hold_norm:.3f}, adm={adm_norm:.3f}, total={tot_norm:.3f} rad/s"
+            )
+            self._last_qdot_diag_info_ns = now_ns
         self._publish_velocity(qdot_cmd)
         return
 
