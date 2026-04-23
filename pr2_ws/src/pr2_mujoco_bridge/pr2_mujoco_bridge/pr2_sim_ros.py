@@ -207,6 +207,10 @@ class Pr2MujocoSim(Node):
         self._full_actuator_override = False
 
         self._pub_joint_states = self.create_publisher(JointState, "joint_states", 10)
+        # Extra dynamics signals for debugging gravity-induced droop in velocity-bottom control.
+        # These publish per-joint generalized forces (N·m or N) in MuJoCo's generalized coordinates.
+        self._pub_joint_bias = self.create_publisher(JointState, "mujoco/joint_bias", 10)
+        self._pub_joint_actuator = self.create_publisher(JointState, "mujoco/joint_actuator", 10)
         self._pub_odom = self.create_publisher(Odometry, "odom", 10)
         self._tf_broadcaster = TransformBroadcaster(self)
 
@@ -454,6 +458,40 @@ class Pr2MujocoSim(Node):
             msg.velocity.append(float(d.qvel[vadr]))
             msg.effort.append(0.0)
 
+    def _fill_joint_effort(self, msg: JointState, *, source: str) -> None:
+        """
+        Publish MuJoCo generalized forces aligned with the same joint ordering as /joint_states.
+
+        source:
+          - "bias": d.qfrc_bias (gravity + Coriolis/centrifugal + passive)
+          - "actuator": d.qfrc_actuator (generalized force produced by actuators)
+        """
+        msg.name = []
+        msg.position = []
+        msg.velocity = []
+        msg.effort = []
+        m, d = self._model, self._data
+        if source == "bias":
+            qfrc = d.qfrc_bias
+        elif source == "actuator":
+            qfrc = d.qfrc_actuator
+        else:
+            raise ValueError(f"unknown effort source: {source}")
+
+        for j in range(m.njnt):
+            jn = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j)
+            if not jn:
+                continue
+            jt = int(m.jnt_type[j])
+            if jt == int(mujoco.mjtJoint.mjJNT_FREE):
+                continue
+            if jt == int(mujoco.mjtJoint.mjJNT_BALL):
+                continue
+            vadr = int(m.jnt_dofadr[j])
+            msg.name.append(jn)
+            # effort is the generalized force for this 1-DoF joint
+            msg.effort.append(float(qfrc[vadr]))
+
     def _joint_motion_log_match(self, joint_name: str) -> bool:
         if self._joint_motion_log_re is not None:
             return self._joint_motion_log_re.search(joint_name) is not None
@@ -564,6 +602,10 @@ class Pr2MujocoSim(Node):
 
         js = JointState()
         js.header.frame_id = self._base_frame
+        js_bias = JointState()
+        js_bias.header.frame_id = self._base_frame
+        js_act = JointState()
+        js_act.header.frame_id = self._base_frame
 
         def one_step() -> None:
             rclpy.spin_once(self, timeout_sec=0.0)
@@ -624,6 +666,12 @@ class Pr2MujocoSim(Node):
             js.header.stamp = stamp
             self._fill_joint_state(js)
             self._pub_joint_states.publish(js)
+            js_bias.header.stamp = stamp
+            js_act.header.stamp = stamp
+            self._fill_joint_effort(js_bias, source="bias")
+            self._fill_joint_effort(js_act, source="actuator")
+            self._pub_joint_bias.publish(js_bias)
+            self._pub_joint_actuator.publish(js_act)
             self._maybe_log_joint_motion(js)
             self._publish_odom(stamp)
 

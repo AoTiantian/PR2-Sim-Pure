@@ -43,7 +43,7 @@ from zoneinfo import ZoneInfo
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, WrenchStamped
+from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, WrenchStamped, Vector3Stamped
 from nav_msgs.msg import Odometry
 from rclpy.time import Time
 from sensor_msgs.msg import JointState
@@ -83,6 +83,12 @@ class Pr2MotionLogger(Node):
         self.declare_parameter("watch_joints", _DEFAULT_JOINTS)
         self.declare_parameter("cartesian_velocity_topic", "arm_cartesian_velocity")
         self.declare_parameter("base_pose_latched_topic", "base_pose_latched")
+        # Optional MuJoCo dynamics topics (empty = do not subscribe)
+        self.declare_parameter("mujoco_joint_bias_topic", "")
+        self.declare_parameter("mujoco_joint_actuator_topic", "")
+        # Optional debug topics from admittance controller (empty = do not subscribe)
+        self.declare_parameter("admittance_wrench_topic", "")
+        self.declare_parameter("admittance_dx_topic", "")
         # Optional extra topics for staleness (empty string = do not subscribe)
         self.declare_parameter("odom_topic", "odom")
         self.declare_parameter("wbc_joint_ref_topic", "wbc/reference/joint_command")
@@ -125,8 +131,12 @@ class Pr2MotionLogger(Node):
         self._tgt: Optional[PoseStamped] = None
         self._wrench = [0.0] * 6          # fx fy fz tx ty tz
         self._cart_vel = [0.0] * 6        # cmd_vx vy vz wx wy wz
+        self._adm_wrench = [float("nan")] * 6   # transformed wrench in control frame
+        self._adm_dx = [float("nan")] * 3       # dx in control frame
         self._jpos: Dict[str, float] = {}
         self._jvel: Dict[str, float] = {}
+        self._jbias: Dict[str, float] = {}
+        self._jact: Dict[str, float] = {}
         self._base_latched = 0
         self._log_prev_ros_t: Optional[float] = None
         self._log_prev_ee_pos: Optional[tuple[float, float, float]] = None
@@ -136,10 +146,14 @@ class Pr2MotionLogger(Node):
         self._t_last_ee: Optional[Time] = None
         self._t_last_tgt: Optional[Time] = None
         self._t_last_wrench: Optional[Time] = None
+        self._t_last_adm_wrench: Optional[Time] = None
+        self._t_last_adm_dx: Optional[Time] = None
         self._t_last_odom: Optional[Time] = None
         self._t_last_wbc_joint: Optional[Time] = None
         self._t_last_wbc_twist: Optional[Time] = None
         self._t_last_state_joint: Optional[Time] = None
+        self._t_last_mj_bias: Optional[Time] = None
+        self._t_last_mj_act: Optional[Time] = None
         self._sub_odom = False
         self._sub_wbc_j = False
         self._sub_wbc_v = False
@@ -149,6 +163,10 @@ class Pr2MotionLogger(Node):
         self._sub_wrench = False
         self._sub_cart = False
         self._sub_latched = False
+        self._sub_adm_wrench = False
+        self._sub_adm_dx = False
+        self._sub_mj_bias = False
+        self._sub_mj_act = False
 
         _ee_t = str(self.get_parameter("ee_pose_topic").value).strip()
         if _ee_t:
@@ -194,6 +212,24 @@ class Pr2MotionLogger(Node):
             self.create_subscription(Bool, _latched_topic, self._on_base_latched, 10)
             self._sub_latched = True
 
+        _aw = str(self.get_parameter("admittance_wrench_topic").value).strip()
+        if _aw:
+            self.create_subscription(WrenchStamped, _aw, self._on_adm_wrench, 10)
+            self._sub_adm_wrench = True
+        _adx = str(self.get_parameter("admittance_dx_topic").value).strip()
+        if _adx:
+            self.create_subscription(Vector3Stamped, _adx, self._on_adm_dx, 10)
+            self._sub_adm_dx = True
+
+        _mj_bias = str(self.get_parameter("mujoco_joint_bias_topic").value).strip()
+        if _mj_bias:
+            self.create_subscription(JointState, _mj_bias, self._on_mujoco_bias, 10)
+            self._sub_mj_bias = True
+        _mj_act = str(self.get_parameter("mujoco_joint_actuator_topic").value).strip()
+        if _mj_act:
+            self.create_subscription(JointState, _mj_act, self._on_mujoco_actuator, 10)
+            self._sub_mj_act = True
+
         # Open CSV and write header
         os.makedirs(os.path.dirname(self._output_path) or ".", exist_ok=True)
         self._csv_file = open(self._output_path, "w", newline="")
@@ -226,7 +262,12 @@ class Pr2MotionLogger(Node):
             "stale_wbc_cmd_vel",
             "age_state_joint_sec",
             "stale_state_joint",
+            "adm_fx", "adm_fy", "adm_fz", "adm_tx", "adm_ty", "adm_tz",
+            "adm_dx", "adm_dy", "adm_dz",
         ]
+        # MuJoCo dynamics (bias/actuator generalized forces) for watched joints
+        for jn in self._watch_joints:
+            header += [f"{jn}_bias", f"{jn}_act"]
         for jn in self._watch_joints:
             header += [f"{jn}_pos", f"{jn}_vel"]
         self._writer.writerow(header)
@@ -272,6 +313,21 @@ class Pr2MotionLogger(Node):
             float(msg.twist.angular.z),
         ]
 
+    def _on_adm_wrench(self, msg: WrenchStamped) -> None:
+        self._t_last_adm_wrench = self.get_clock().now()
+        self._adm_wrench = [
+            float(msg.wrench.force.x),
+            float(msg.wrench.force.y),
+            float(msg.wrench.force.z),
+            float(msg.wrench.torque.x),
+            float(msg.wrench.torque.y),
+            float(msg.wrench.torque.z),
+        ]
+
+    def _on_adm_dx(self, msg: Vector3Stamped) -> None:
+        self._t_last_adm_dx = self.get_clock().now()
+        self._adm_dx = [float(msg.vector.x), float(msg.vector.y), float(msg.vector.z)]
+
     def _on_odom(self, _msg: Odometry) -> None:
         self._t_last_odom = self.get_clock().now()
 
@@ -296,6 +352,18 @@ class Pr2MotionLogger(Node):
                     self._jpos[name] = float(msg.position[i])
                 if i < len(msg.velocity):
                     self._jvel[name] = float(msg.velocity[i])
+
+    def _on_mujoco_bias(self, msg: JointState) -> None:
+        self._t_last_mj_bias = self.get_clock().now()
+        for i, name in enumerate(msg.name):
+            if name in self._watch_joints and i < len(msg.effort):
+                self._jbias[name] = float(msg.effort[i])
+
+    def _on_mujoco_actuator(self, msg: JointState) -> None:
+        self._t_last_mj_act = self.get_clock().now()
+        for i, name in enumerate(msg.name):
+            if name in self._watch_joints and i < len(msg.effort):
+                self._jact[name] = float(msg.effort[i])
 
     @staticmethod
     def _age_sec(now: Time, last: Optional[Time]) -> float:
@@ -362,9 +430,15 @@ class Pr2MotionLogger(Node):
             joint_row.append(self._jpos.get(jn, nan))
             joint_row.append(self._jvel.get(jn, nan))
 
+        dyn_row: List[float] = []
+        for jn in self._watch_joints:
+            dyn_row.append(self._jbias.get(jn, nan))
+            dyn_row.append(self._jact.get(jn, nan))
+
         stale_extra = self._stale_cols(now)
         extra = [float(self._base_latched), ee_speed_lin] + stale_extra
-        row = [wall, ros] + ee_row + tgt_row + self._wrench + self._cart_vel + extra + joint_row
+        dbg = self._adm_wrench + self._adm_dx
+        row = [wall, ros] + ee_row + tgt_row + self._wrench + self._cart_vel + extra + dbg + dyn_row + joint_row
         self._writer.writerow([f"{v:.6f}" if not math.isnan(v) else "nan" for v in row])
         self._row_count += 1
 

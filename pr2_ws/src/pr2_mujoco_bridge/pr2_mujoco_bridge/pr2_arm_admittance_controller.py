@@ -18,7 +18,7 @@ from typing import List
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped, Vector3Stamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
@@ -119,6 +119,13 @@ class Pr2ArmAdmittanceController(Node):
         self.declare_parameter("latch_stable_duration_sec", 0.35)
         self.declare_parameter("ee_speed_estimate_lpf_alpha", 0.35)
         self.declare_parameter("base_pose_latched_topic", "base_pose_latched")
+        # When enabled, keep publishing zero Twist until external wrench is active.
+        # This prevents the spring-back term (-K*dx) from moving the arm before contact/force.
+        self.declare_parameter("hold_until_wrench_active", False)
+        self.declare_parameter("wrench_activate_force_norm", 0.5)    # N
+        self.declare_parameter("wrench_activate_torque_norm", 0.05)  # N·m
+        self.declare_parameter("debug_wrench_topic", "")
+        self.declare_parameter("debug_dx_topic", "")
 
         self._in_wrench_topic = str(self.get_parameter("input_wrench_topic").value)
         self._in_pose_topic = str(self.get_parameter("input_pose_topic").value)
@@ -144,6 +151,15 @@ class Pr2ArmAdmittanceController(Node):
         self._base_pose_latched_topic = str(
             self.get_parameter("base_pose_latched_topic").value
         ).strip()
+        self._hold_until_wrench_active = bool(self.get_parameter("hold_until_wrench_active").value)
+        self._wrench_activate_force_norm = max(
+            0.0, float(self.get_parameter("wrench_activate_force_norm").value)
+        )
+        self._wrench_activate_torque_norm = max(
+            0.0, float(self.get_parameter("wrench_activate_torque_norm").value)
+        )
+        self._debug_wrench_topic = str(self.get_parameter("debug_wrench_topic").value).strip()
+        self._debug_dx_topic = str(self.get_parameter("debug_dx_topic").value).strip()
 
         rate_hz = float(self.get_parameter("rate_hz").value)
         self._dt = 1.0 / max(rate_hz, 1.0)
@@ -190,6 +206,16 @@ class Pr2ArmAdmittanceController(Node):
         self._pub_base_latched = (
             self.create_publisher(Bool, self._base_pose_latched_topic, 10)
             if self._base_pose_latched_topic
+            else None
+        )
+        self._pub_dbg_wrench = (
+            self.create_publisher(WrenchStamped, self._debug_wrench_topic, 10)
+            if self._debug_wrench_topic
+            else None
+        )
+        self._pub_dbg_dx = (
+            self.create_publisher(Vector3Stamped, self._debug_dx_topic, 10)
+            if self._debug_dx_topic
             else None
         )
         self.create_subscription(WrenchStamped, self._in_wrench_topic, self._on_wrench, 20)
@@ -362,6 +388,36 @@ class Pr2ArmAdmittanceController(Node):
         for i in range(3):
             wr[i] = _apply_deadzone(float(wr[i]), self._dz_f[i])
             wr[3 + i] = _apply_deadzone(float(wr[3 + i]), self._dz_t[i])
+
+        if self._pub_dbg_wrench is not None:
+            m = WrenchStamped()
+            m.header.stamp = self.get_clock().now().to_msg()
+            m.header.frame_id = self._target_frame_id or pose_frame
+            m.wrench.force.x = float(wr[0])
+            m.wrench.force.y = float(wr[1])
+            m.wrench.force.z = float(wr[2])
+            m.wrench.torque.x = float(wr[3])
+            m.wrench.torque.y = float(wr[4])
+            m.wrench.torque.z = float(wr[5])
+            self._pub_dbg_wrench.publish(m)
+        if self._pub_dbg_dx is not None:
+            m = Vector3Stamped()
+            m.header.stamp = self.get_clock().now().to_msg()
+            m.header.frame_id = self._target_frame_id or pose_frame
+            m.vector.x = float(self._dx_lin[0])
+            m.vector.y = float(self._dx_lin[1])
+            m.vector.z = float(self._dx_lin[2])
+            self._pub_dbg_dx.publish(m)
+
+        if self._hold_until_wrench_active:
+            fn = float(np.linalg.norm(wr[:3]))
+            tn = float(np.linalg.norm(wr[3:]))
+            if fn < self._wrench_activate_force_norm and tn < self._wrench_activate_torque_norm:
+                out = TwistStamped()
+                out.header.stamp = self.get_clock().now().to_msg()
+                out.header.frame_id = self._target_frame_id or pose_frame
+                self._pub_twist.publish(out)
+                return
 
         # 一阶导纳：Δẋ = B_d⁻¹ · (F_ext - K_d · Δx)
         dxdot_lin = np.zeros(3, dtype=np.float64)

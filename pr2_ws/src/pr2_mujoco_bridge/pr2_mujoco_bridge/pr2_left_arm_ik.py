@@ -90,10 +90,15 @@ class Pr2LeftArmIk(Node):
         # "velocity_tracking" = new: TwistStamped → J⁺·ẋ_cmd → integrate → PD → torque
         self.declare_parameter("cartesian_velocity_topic", "arm_cartesian_velocity")
         self.declare_parameter("velocity_cmd_timeout_sec", 0.15)
+        # Ignore near-zero Twist commands (often published continuously) and keep pre-command hold.
+        self.declare_parameter("velocity_cmd_min_norm", 1.0e-3)
         self.declare_parameter("velocity_integration_gain", 1.0)
         self.declare_parameter("velocity_sync_alpha", 0.3)
         # Uniform scale on q̇_cmd so no joint exceeds this |rad/s| (velocity_tracking only).
         self.declare_parameter("max_joint_velocity_rad_s", 12.0)
+        # When no Cartesian velocity command is available, hold at initial_joint_pose_json
+        # by commanding joint velocities q̇ = k * (q_init - q). 0 disables this hold.
+        self.declare_parameter("pre_command_hold_kp", 6.0)
         # Per-joint Kp/Kd scale factors as JSON {joint_name: scale}.
         # Wrist/forearm roll joints have small inertia; lower scale prevents oscillation.
         # Default: forearm_roll=0.25, wrist_flex=0.4, wrist_roll=0.25
@@ -260,9 +265,11 @@ class Pr2LeftArmIk(Node):
         # velocity_tracking mode state
         self._control_mode = str(self.get_parameter("control_mode").value)
         self._vel_cmd_timeout = float(self.get_parameter("velocity_cmd_timeout_sec").value)
+        self._vel_cmd_min_norm = max(0.0, float(self.get_parameter("velocity_cmd_min_norm").value))
         self._vel_integration_gain = float(self.get_parameter("velocity_integration_gain").value)
         self._vel_sync_alpha = float(np.clip(self.get_parameter("velocity_sync_alpha").value, 0.0, 1.0))
         self._max_joint_vel_rad_s = float(self.get_parameter("max_joint_velocity_rad_s").value)
+        self._pre_hold_kp = max(0.0, float(self.get_parameter("pre_command_hold_kp").value))
         self._last_qdot_scale_warn_ns = 0
         self._cart_vel_cmd: np.ndarray | None = None
         self._t_cart_vel = self.get_clock().now()
@@ -349,6 +356,13 @@ class Pr2LeftArmIk(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.name = list(self._controlled_joints)
         msg.effort = [float(x) for x in tau]
+        self._pub_cmd.publish(msg)
+
+    def _publish_velocity(self, qdot_cmd: np.ndarray) -> None:
+        msg = JointState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.name = list(self._controlled_joints)
+        msg.velocity = [float(x) for x in qdot_cmd]
         self._pub_cmd.publish(msg)
 
     def _build_model_state_from_joint_states(self) -> bool:
@@ -566,43 +580,45 @@ class Pr2LeftArmIk(Node):
 
     def _on_timer_velocity_tracking(self) -> None:
         dt = 1.0 / self._ctrl_hz
+        zero_qdot = np.zeros(len(self._controlled_joints), dtype=np.float64)
 
-        # Pre-command: hold at initial joint pose (same logic as pose_tracking pre-latch)
-        if self._cart_vel_cmd is None and self._initial_joint_pose:
-            if not self._joint_state_pos:
-                return
-            if not self._build_model_state_from_joint_states():
-                return
-            q_cur = np.array([self._joint_state_pos.get(jn, 0.0) for jn in self._controlled_joints], dtype=np.float64)
-            q_vel = np.array([self._joint_state_vel.get(jn, 0.0) for jn in self._controlled_joints], dtype=np.float64)
-            q_tgt = np.array([self._initial_joint_pose.get(jn, q_cur[i]) for i, jn in enumerate(self._controlled_joints)], dtype=np.float64)
-            kp_scales = np.array([self._joint_kp_scale.get(jn, 1.0) for jn in self._controlled_joints], dtype=np.float64)
-            tau = (self._kp * kp_scales) * (q_tgt - q_cur) - (self._kd * kp_scales) * q_vel
-            if self._use_gravity_compensation:
-                tau += np.array([float(self._data.qfrc_bias[v]) for v in self._vadr], dtype=np.float64)
-            tau_clip = np.minimum(
-                np.array([self._joint_to_tau_limit.get(jn, self._max_torque) for jn in self._controlled_joints], dtype=np.float64),
-                self._max_torque,
+        def publish_hold_if_possible() -> bool:
+            if self._pre_hold_kp <= 0.0 or (not self._initial_joint_pose):
+                return False
+            if not self._is_fresh(self._t_joint_state):
+                return False
+            q_cur = np.array(
+                [self._joint_state_pos.get(jn, 0.0) for jn in self._controlled_joints],
+                dtype=np.float64,
             )
-            tau = np.clip(tau, -tau_clip, tau_clip)
-            if self._tau_initialized:
-                tau = self._tau_lpf_alpha * tau + (1.0 - self._tau_lpf_alpha) * self._tau_prev
-            self._tau_prev = tau.copy()
-            self._tau_initialized = True
-            self._publish_effort(tau)
+            q_tgt = np.array(
+                [
+                    self._initial_joint_pose.get(jn, q_cur[i])
+                    for i, jn in enumerate(self._controlled_joints)
+                ],
+                dtype=np.float64,
+            )
+            qdot_hold = self._pre_hold_kp * (q_tgt - q_cur)
+            qdot_hold = self._uniformly_scale_qdot_cmd(qdot_hold)
+            self._publish_velocity(qdot_hold)
+            return True
+
+        # Treat near-zero Twist as "no command" and keep holding initial pose.
+        cmd_norm = float(np.linalg.norm(self._cart_vel_cmd)) if self._cart_vel_cmd is not None else 0.0
+        cmd_effective = (self._cart_vel_cmd is not None) and (cmd_norm > self._vel_cmd_min_norm)
+
+        # Pre-command hold: do not require odom/model state, only joint_states.
+        if not cmd_effective:
+            if publish_hold_if_possible():
+                return
+            self._publish_velocity(zero_qdot)
             return
 
         if not self._is_fresh(self._t_joint_state):
-            if self._tau_initialized:
-                self._publish_effort(self._tau_prev)
-            return
-        if self._require_odom_sync and not self._is_fresh(self._t_odom):
-            if self._tau_initialized:
-                self._publish_effort(self._tau_prev)
+            self._publish_velocity(zero_qdot)
             return
         if not self._build_model_state_from_joint_states():
-            if self._tau_initialized:
-                self._publish_effort(self._tau_prev)
+            self._publish_velocity(zero_qdot)
             return
 
         q_cur = np.array([self._joint_state_pos[jn] for jn in self._controlled_joints], dtype=np.float64)
@@ -622,51 +638,24 @@ class Pr2LeftArmIk(Node):
             alpha_sync = self._vel_sync_alpha
             self._q_integrated = (1.0 - alpha_sync) * self._q_integrated + alpha_sync * q_cur
 
-        # Integrate q̇_cmd if velocity command is fresh
         vel_age = (self.get_clock().now() - self._t_cart_vel).nanoseconds * 1e-9
-        if self._cart_vel_cmd is not None and vel_age <= self._vel_cmd_timeout:
-            qdot_raw = self._compute_qdot_from_cartesian_vel(self._cart_vel_cmd)
-            qdot_cmd = self._uniformly_scale_qdot_cmd(qdot_raw)
-            self._q_integrated = self._q_integrated + qdot_cmd * dt * self._vel_integration_gain
+        if (not cmd_effective) or vel_age > self._vel_cmd_timeout:
+            if publish_hold_if_possible():
+                return
+            self._publish_velocity(zero_qdot)
+            return
 
-        # Hard joint limits
-        self._q_integrated = np.clip(self._q_integrated, np.array(self._qmin), np.array(self._qmax))
+        if self._require_odom_sync and not self._is_fresh(self._t_odom):
+            if publish_hold_if_possible():
+                return
+            self._publish_velocity(zero_qdot)
+            return
 
-        # Soft joint limits (same as pose_tracking)
-        if self._joint_soft_limit_margin > 0.0 and self._initial_joint_pose:
-            for i, jn in enumerate(self._controlled_joints):
-                if "roll" in jn:
-                    continue
-                if jn not in self._initial_joint_pose:
-                    continue
-                q_init = self._initial_joint_pose[jn]
-                soft_lo = max(self._qmin[i], q_init - self._joint_soft_limit_margin)
-                soft_hi = min(self._qmax[i], q_init + self._joint_soft_limit_margin)
-                self._q_integrated[i] = float(np.clip(self._q_integrated[i], soft_lo, soft_hi))
-
-        # PD + gravity compensation → torque (identical to pose_tracking path)
-        kp_scales = np.array([self._joint_kp_scale.get(jn, 1.0) for jn in self._controlled_joints], dtype=np.float64)
-        tau = (self._kp * kp_scales) * (self._q_integrated - q_cur) - (self._kd * kp_scales) * q_vel
-        if self._use_gravity_compensation:
-            tau_bias = np.array([float(self._data.qfrc_bias[vadr]) for vadr in self._vadr], dtype=np.float64)
-            tau = tau + tau_bias
-
-        tau_lims = np.array([self._joint_to_tau_limit.get(jn, self._max_torque) for jn in self._controlled_joints], dtype=np.float64)
-        if self._max_torque > 0:
-            tau_lims = np.minimum(tau_lims, self._max_torque)
-        tau = np.clip(tau, -tau_lims, tau_lims)
-
-        if self._tau_initialized and self._tau_rate_limit > 0.0:
-            dmax = self._tau_rate_limit * dt
-            dtau = np.clip(tau - self._tau_prev, -dmax, dmax)
-            tau = self._tau_prev + dtau
-
-        if self._tau_initialized:
-            tau = self._tau_lpf_alpha * tau + (1.0 - self._tau_lpf_alpha) * self._tau_prev
-
-        self._tau_prev = tau.copy()
-        self._tau_initialized = True
-        self._publish_effort(tau)
+        # Fresh command: compute and publish joint velocity.
+        qdot_raw = self._compute_qdot_from_cartesian_vel(self._cart_vel_cmd)
+        qdot_cmd = self._uniformly_scale_qdot_cmd(qdot_raw)
+        self._publish_velocity(qdot_cmd)
+        return
 
 
 def main() -> None:

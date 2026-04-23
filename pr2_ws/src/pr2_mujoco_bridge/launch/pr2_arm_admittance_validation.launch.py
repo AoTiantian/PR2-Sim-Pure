@@ -15,7 +15,10 @@ def generate_launch_description() -> LaunchDescription:
         default_value="/workspace/unitree_mujoco/unitree_robots/pr2/scene.xml",
     )
     viewer_arg = DeclareLaunchArgument("use_viewer", default_value="true")
+    pause_arg = DeclareLaunchArgument("pause_si", default_value="false")
     force_arg = DeclareLaunchArgument("force_x", default_value="10.0")
+    force_y_arg = DeclareLaunchArgument("force_y", default_value="0.0")
+    force_z_arg = DeclareLaunchArgument("force_z", default_value="0.0")
     duration_arg = DeclareLaunchArgument("duration_sec", default_value="10.0")
     force_start_arg = DeclareLaunchArgument("force_start_sec", default_value="5.0")
     # Keep optional schedule for advanced tests; empty means single-step mode.
@@ -38,15 +41,16 @@ def generate_launch_description() -> LaunchDescription:
             {"lock_base_settle_sec": 0.8},
             {"use_cmd_vel": False},
             {"use_viewer": ParameterValue(LaunchConfiguration("use_viewer"), value_type=bool)},
+            {"pause_sim": ParameterValue(LaunchConfiguration("pause_si"), value_type=bool)},
             # Start arm at the same configuration as initial_joint_pose_json to
             # eliminate large initial convergence motions and Coriolis disturbances.
             {"initial_qpos_json": (
-                '{"l_shoulder_pan_joint":0.4,'
-                '"l_shoulder_lift_joint":-0.2,'
+                '{"l_shoulder_pan_joint":0.0,'
+                '"l_shoulder_lift_joint":0.0,'
                 '"l_upper_arm_roll_joint":0.0,'
-                '"l_elbow_flex_joint":-0.8,'
+                '"l_elbow_flex_joint":0.0,'
                 '"l_forearm_roll_joint":0.0,'
-                '"l_wrist_flex_joint":-0.3,'
+                '"l_wrist_flex_joint":0.0,'
                 '"l_wrist_roll_joint":0.0}'
             )},
         ],
@@ -98,18 +102,23 @@ def generate_launch_description() -> LaunchDescription:
             {"strict_frame_consistency": True},
             {"suppress_output_on_tf_failure": True},
             {"freeze_orientation": True},
-            {"base_pose_latch_delay_sec": 0.5},
+            {"base_pose_latch_delay_sec": 2.0},
             {"base_pose_latch_max_wait_sec": 8.0},
             {"ee_linear_speed_thresh": 0.02},
             {"ee_angular_speed_thresh": 0.15},
             {"latch_stable_duration_sec": 0.3},
             {"ee_speed_estimate_lpf_alpha": 0.25},
             {"base_pose_latched_topic": "base_pose_latched"},
+            {"hold_until_wrench_active": True},
+            {"wrench_activate_force_norm": 0.5},
+            {"wrench_activate_torque_norm": 0.05},
+            {"debug_wrench_topic": "arm_adm/debug_wrench"},
+            {"debug_dx_topic": "arm_adm/debug_dx"},
             {"wrench_lpf_alpha": 0.15},
             {"damping_linear": [320.0, 320.0, 400.0]},
             {"stiffness_linear": [260.0, 260.0, 320.0]},
-            {"max_linear_velocity": [0.12, 0.12, 0.10]},
-            {"max_linear_displacement": [0.06, 0.06, 0.05]},
+            {"max_linear_velocity": [0.25, 0.25, 0.25]},
+            {"max_linear_displacement": [0.06, 0.06, 0.10]},
             {"damping_angular": [24.0, 24.0, 18.0]},
             {"stiffness_angular": [35.0, 35.0, 20.0]},
         ],
@@ -131,23 +140,18 @@ def generate_launch_description() -> LaunchDescription:
             {"require_odom_sync": True},
             {"state_timeout_sec": 0.20},
             {"initial_joint_pose_json": (
-                '{"l_shoulder_pan_joint":0.4,'
-                '"l_shoulder_lift_joint":-0.2,'
+                '{"l_shoulder_pan_joint":0.0,'
+                '"l_shoulder_lift_joint":0.0,'
                 '"l_upper_arm_roll_joint":0.0,'
-                '"l_elbow_flex_joint":-0.8,'
+                '"l_elbow_flex_joint":0.0,'
                 '"l_forearm_roll_joint":0.0,'
-                '"l_wrist_flex_joint":-0.3,'
+                '"l_wrist_flex_joint":0.0,'
                 '"l_wrist_roll_joint":0.0}'
             )},
             {"damping_lambda": 0.15},
             {"max_joint_velocity_rad_s": 10.0},
-            {"torque_kp": 120.0},
-            {"torque_kd": 18.0},
             {"velocity_integration_gain": 1.0},
             {"velocity_sync_alpha": 0.3},
-            {"max_torque": 300.0},
-            {"tau_rate_limit": 600.0},
-            {"tau_lpf_alpha": 0.35},
             {"joint_soft_limit_margin": 0.35},
         ],
     )
@@ -167,6 +171,8 @@ def generate_launch_description() -> LaunchDescription:
             {"arm_only_mode": True},
             {"baseline_latch_mode": "at_force_start"},
             {"force_x": ParameterValue(LaunchConfiguration("force_x"), value_type=float)},
+            {"force_y": ParameterValue(LaunchConfiguration("force_y"), value_type=float)},
+            {"force_z": ParameterValue(LaunchConfiguration("force_z"), value_type=float)},
             {"duration_sec": ParameterValue(LaunchConfiguration("duration_sec"), value_type=float)},
             {"force_start_sec": ParameterValue(LaunchConfiguration("force_start_sec"), value_type=float)},
             {"force_schedule_json": ParameterValue(LaunchConfiguration("force_schedule_json"), value_type=str)},
@@ -188,6 +194,10 @@ def generate_launch_description() -> LaunchDescription:
             {"cartesian_velocity_topic": "arm_cartesian_velocity"},
             {"base_pose_latched_topic": "base_pose_latched"},
             {"wrench_topic": "wbc/arm_external_wrench"},
+            {"admittance_wrench_topic": "arm_adm/debug_wrench"},
+            {"admittance_dx_topic": "arm_adm/debug_dx"},
+            {"mujoco_joint_bias_topic": "mujoco/joint_bias"},
+            {"mujoco_joint_actuator_topic": "mujoco/joint_actuator"},
             {"joint_state_topic": "joint_states"},
             {"odom_topic": "odom"},
             {"wbc_joint_ref_topic": "wbc/reference/joint_command"},
@@ -214,10 +224,13 @@ def generate_launch_description() -> LaunchDescription:
             model_arg,
             viewer_arg,
             force_arg,
+            force_y_arg,
+            force_z_arg,
             duration_arg,
             force_start_arg,
             force_schedule_arg,
             settle_arg,
+            pause_arg,
             log_arg,
             sim,
             state_est,
