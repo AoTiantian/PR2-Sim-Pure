@@ -15,26 +15,47 @@ CSV 列（按顺序）：
   tgt_x tgt_y tgt_z  IK 目标位置 (m)（未收到时为 nan）
   tgt_qw tgt_qx tgt_qy tgt_qz  IK 目标姿态
   fx fy fz tx ty tz  施加力 (N) 和力矩 (N·m)
+  cmd_vx..cmd_wz    笛卡尔速度指令（TwistStamped）
+  base_latched      导纳节点已锁定基准位姿后为 1，否则 0
+  ee_speed_lin_est  由相邻日志采样估计的末端线速度范数 (m/s)（无 ee_pose 时为 nan）
+  age_*_sec         自上次收到对应话题以来经过的 ROS 时间（秒）；从未收到为 nan
+  stale_*           若 age > 对应阈值则为 1，否则 0（与 IK/WBC 内部超时含义对齐，阈值见参数）
   <joint_name>_pos <joint_name>_vel  各受监控关节的位置和速度
 
 参数：
-  output_path       : CSV 文件路径，默认 /tmp/pr2_motion_<timestamp>.csv
+  output_path       : CSV 文件路径，默认 /workspace/logs/pr2_motion_<北京时间戳>.csv
   log_rate_hz       : 写入频率，默认 50.0
   watch_joints      : 要记录的关节名列表，默认为左臂 7 个关节 + torso
   ee_pose_topic / ik_target_topic / wrench_topic / joint_state_topic
+  odom_topic / wbc_joint_ref_topic / wbc_cmd_vel_topic / state_joint_topic（空字符串表示不订阅）
+  stale_thresh_*_sec  与各 age 比较的阈值（默认与 pr2_arm_admittance_validation.launch 中 IK/WBC 一致）
 """
 
 import csv
 import math
 import os
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+
+from zoneinfo import ZoneInfo
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped, WrenchStamped
+from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, WrenchStamped
+from nav_msgs.msg import Odometry
+from rclpy.time import Time
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
+
+def _beijing_strftime(fmt: str) -> str:
+    """Wall-clock time in China Standard Time (UTC+8), for log filenames."""
+    try:
+        return datetime.now(ZoneInfo("Asia/Shanghai")).strftime(fmt)
+    except Exception:
+        return datetime.now(timezone(timedelta(hours=8))).strftime(fmt)
+
 
 _DEFAULT_JOINTS = [
     "torso_lift_joint",
@@ -53,54 +74,125 @@ class Pr2MotionLogger(Node):
         super().__init__("pr2_motion_logger")
 
         self.declare_parameter("output_path", "")
+        self.declare_parameter("output_prefix", "pr2_motion")
         self.declare_parameter("log_rate_hz", 50.0)
         self.declare_parameter("ee_pose_topic", "ee_pose")
         self.declare_parameter("ik_target_topic", "ik_target_pose")
         self.declare_parameter("wrench_topic", "wbc/arm_external_wrench")
         self.declare_parameter("joint_state_topic", "joint_states")
         self.declare_parameter("watch_joints", _DEFAULT_JOINTS)
+        self.declare_parameter("cartesian_velocity_topic", "arm_cartesian_velocity")
+        self.declare_parameter("base_pose_latched_topic", "base_pose_latched")
+        # Optional extra topics for staleness (empty string = do not subscribe)
+        self.declare_parameter("odom_topic", "odom")
+        self.declare_parameter("wbc_joint_ref_topic", "wbc/reference/joint_command")
+        self.declare_parameter("wbc_cmd_vel_topic", "wbc/reference/cmd_vel")
+        self.declare_parameter("state_joint_topic", "state/joint_states")
+        # Thresholds (sec) for stale_* flags — align with pr2_left_arm_ik / pr2_wbc_coordinator defaults
+        self.declare_parameter("stale_joint_states_sec", 0.20)
+        self.declare_parameter("stale_cart_vel_sec", 0.15)
+        self.declare_parameter("stale_odom_sec", 0.20)
+        self.declare_parameter("stale_ee_pose_sec", 0.12)
+        self.declare_parameter("stale_ik_target_sec", 1.0)
+        self.declare_parameter("stale_wrench_sec", 0.50)
+        self.declare_parameter("stale_wbc_joint_ref_sec", 0.15)
+        self.declare_parameter("stale_wbc_cmd_vel_sec", 0.15)
+        self.declare_parameter("stale_state_joint_sec", 0.25)
 
         _raw_path = str(self.get_parameter("output_path").value).strip()
         if not _raw_path:
-            ts = time.strftime("%Y%m%d_%H%M%S")
-            _raw_path = f"/workspace/logs/pr2_motion_{ts}.csv"
+            ts = _beijing_strftime("%Y%m%d_%H%M%S")
+            prefix = str(self.get_parameter("output_prefix").value).strip() or "pr2_motion"
+            _raw_path = f"/workspace/logs/{prefix}_{ts}.csv"
         self._output_path = _raw_path
         rate_hz = float(self.get_parameter("log_rate_hz").value)
         self._watch_joints: List[str] = list(
             self.get_parameter("watch_joints").value
         )
 
+        self._th_js = float(self.get_parameter("stale_joint_states_sec").value)
+        self._th_cv = float(self.get_parameter("stale_cart_vel_sec").value)
+        self._th_odom = float(self.get_parameter("stale_odom_sec").value)
+        self._th_ee = float(self.get_parameter("stale_ee_pose_sec").value)
+        self._th_tgt = float(self.get_parameter("stale_ik_target_sec").value)
+        self._th_wr = float(self.get_parameter("stale_wrench_sec").value)
+        self._th_wbc_j = float(self.get_parameter("stale_wbc_joint_ref_sec").value)
+        self._th_wbc_v = float(self.get_parameter("stale_wbc_cmd_vel_sec").value)
+        self._th_st_js = float(self.get_parameter("stale_state_joint_sec").value)
+
         # Latest values (updated by callbacks)
         self._ee: Optional[PoseStamped] = None
         self._tgt: Optional[PoseStamped] = None
         self._wrench = [0.0] * 6          # fx fy fz tx ty tz
+        self._cart_vel = [0.0] * 6        # cmd_vx vy vz wx wy wz
         self._jpos: Dict[str, float] = {}
         self._jvel: Dict[str, float] = {}
+        self._base_latched = 0
+        self._log_prev_ros_t: Optional[float] = None
+        self._log_prev_ee_pos: Optional[tuple[float, float, float]] = None
 
-        self.create_subscription(
-            PoseStamped,
-            self.get_parameter("ee_pose_topic").value,
-            lambda m: setattr(self, "_ee", m),
-            10,
-        )
-        self.create_subscription(
-            PoseStamped,
-            self.get_parameter("ik_target_topic").value,
-            lambda m: setattr(self, "_tgt", m),
-            10,
-        )
-        self.create_subscription(
-            WrenchStamped,
-            self.get_parameter("wrench_topic").value,
-            self._on_wrench,
-            10,
-        )
+        self._t_last_joint: Optional[Time] = None
+        self._t_last_cart: Optional[Time] = None
+        self._t_last_ee: Optional[Time] = None
+        self._t_last_tgt: Optional[Time] = None
+        self._t_last_wrench: Optional[Time] = None
+        self._t_last_odom: Optional[Time] = None
+        self._t_last_wbc_joint: Optional[Time] = None
+        self._t_last_wbc_twist: Optional[Time] = None
+        self._t_last_state_joint: Optional[Time] = None
+        self._sub_odom = False
+        self._sub_wbc_j = False
+        self._sub_wbc_v = False
+        self._sub_st_js = False
+        self._sub_ee = False
+        self._sub_tgt = False
+        self._sub_wrench = False
+        self._sub_cart = False
+        self._sub_latched = False
+
+        _ee_t = str(self.get_parameter("ee_pose_topic").value).strip()
+        if _ee_t:
+            self.create_subscription(PoseStamped, _ee_t, self._on_ee_pose, 10)
+            self._sub_ee = True
+        _tgt_t = str(self.get_parameter("ik_target_topic").value).strip()
+        if _tgt_t:
+            self.create_subscription(PoseStamped, _tgt_t, self._on_tgt_pose, 10)
+            self._sub_tgt = True
+        _wr_t = str(self.get_parameter("wrench_topic").value).strip()
+        if _wr_t:
+            self.create_subscription(WrenchStamped, _wr_t, self._on_wrench, 10)
+            self._sub_wrench = True
         self.create_subscription(
             JointState,
             self.get_parameter("joint_state_topic").value,
             self._on_joint_state,
             30,
         )
+        _cv_t = str(self.get_parameter("cartesian_velocity_topic").value).strip()
+        if _cv_t:
+            self.create_subscription(TwistStamped, _cv_t, self._on_cart_vel, 10)
+            self._sub_cart = True
+        _odom_t = str(self.get_parameter("odom_topic").value).strip()
+        if _odom_t:
+            self.create_subscription(Odometry, _odom_t, self._on_odom, 20)
+            self._sub_odom = True
+        _wbc_j = str(self.get_parameter("wbc_joint_ref_topic").value).strip()
+        if _wbc_j:
+            self.create_subscription(JointState, _wbc_j, self._on_wbc_joint_ref, 10)
+            self._sub_wbc_j = True
+        _wbc_v = str(self.get_parameter("wbc_cmd_vel_topic").value).strip()
+        if _wbc_v:
+            self.create_subscription(Twist, _wbc_v, self._on_wbc_cmd_vel, 10)
+            self._sub_wbc_v = True
+        _st_js = str(self.get_parameter("state_joint_topic").value).strip()
+        if _st_js:
+            self.create_subscription(JointState, _st_js, self._on_state_joint, 20)
+            self._sub_st_js = True
+
+        _latched_topic = str(self.get_parameter("base_pose_latched_topic").value).strip()
+        if _latched_topic:
+            self.create_subscription(Bool, _latched_topic, self._on_base_latched, 10)
+            self._sub_latched = True
 
         # Open CSV and write header
         os.makedirs(os.path.dirname(self._output_path) or ".", exist_ok=True)
@@ -113,6 +205,27 @@ class Pr2MotionLogger(Node):
             "tgt_x", "tgt_y", "tgt_z",
             "tgt_qw", "tgt_qx", "tgt_qy", "tgt_qz",
             "fx", "fy", "fz", "tx", "ty", "tz",
+            "cmd_vx", "cmd_vy", "cmd_vz", "cmd_wx", "cmd_wy", "cmd_wz",
+            "base_latched",
+            "ee_speed_lin_est",
+            "age_joint_states_sec",
+            "stale_joint_states",
+            "age_cart_vel_sec",
+            "stale_cart_vel",
+            "age_odom_sec",
+            "stale_odom",
+            "age_ee_pose_sec",
+            "stale_ee_pose",
+            "age_ik_target_sec",
+            "stale_ik_target",
+            "age_wrench_sec",
+            "stale_wrench",
+            "age_wbc_joint_ref_sec",
+            "stale_wbc_joint_ref",
+            "age_wbc_cmd_vel_sec",
+            "stale_wbc_cmd_vel",
+            "age_state_joint_sec",
+            "stale_state_joint",
         ]
         for jn in self._watch_joints:
             header += [f"{jn}_pos", f"{jn}_vel"]
@@ -124,10 +237,21 @@ class Pr2MotionLogger(Node):
 
         self.get_logger().info(
             f"pr2_motion_logger 已启动: 输出={self._output_path}, "
-            f"频率={rate_hz:.1f}Hz, 关节={self._watch_joints}"
+            f"频率={rate_hz:.1f}Hz, 关节={self._watch_joints}, "
+            f"staleness 列已启用 (odom={self._sub_odom}, wbc_j={self._sub_wbc_j}, "
+            f"wbc_v={self._sub_wbc_v}, state_js={self._sub_st_js})"
         )
 
+    def _on_ee_pose(self, msg: PoseStamped) -> None:
+        self._ee = msg
+        self._t_last_ee = self.get_clock().now()
+
+    def _on_tgt_pose(self, msg: PoseStamped) -> None:
+        self._tgt = msg
+        self._t_last_tgt = self.get_clock().now()
+
     def _on_wrench(self, msg: WrenchStamped) -> None:
+        self._t_last_wrench = self.get_clock().now()
         self._wrench = [
             float(msg.wrench.force.x),
             float(msg.wrench.force.y),
@@ -137,7 +261,35 @@ class Pr2MotionLogger(Node):
             float(msg.wrench.torque.z),
         ]
 
+    def _on_cart_vel(self, msg: TwistStamped) -> None:
+        self._t_last_cart = self.get_clock().now()
+        self._cart_vel = [
+            float(msg.twist.linear.x),
+            float(msg.twist.linear.y),
+            float(msg.twist.linear.z),
+            float(msg.twist.angular.x),
+            float(msg.twist.angular.y),
+            float(msg.twist.angular.z),
+        ]
+
+    def _on_odom(self, _msg: Odometry) -> None:
+        self._t_last_odom = self.get_clock().now()
+
+    def _on_wbc_joint_ref(self, _msg: JointState) -> None:
+        self._t_last_wbc_joint = self.get_clock().now()
+
+    def _on_wbc_cmd_vel(self, _msg: Twist) -> None:
+        self._t_last_wbc_twist = self.get_clock().now()
+
+    def _on_state_joint(self, _msg: JointState) -> None:
+        self._t_last_state_joint = self.get_clock().now()
+
+    def _on_base_latched(self, msg: Bool) -> None:
+        if bool(msg.data):
+            self._base_latched = 1
+
     def _on_joint_state(self, msg: JointState) -> None:
+        self._t_last_joint = self.get_clock().now()
         for i, name in enumerate(msg.name):
             if name in self._watch_joints:
                 if i < len(msg.position):
@@ -145,17 +297,58 @@ class Pr2MotionLogger(Node):
                 if i < len(msg.velocity):
                     self._jvel[name] = float(msg.velocity[i])
 
+    @staticmethod
+    def _age_sec(now: Time, last: Optional[Time]) -> float:
+        if last is None:
+            return float("nan")
+        return float((now - last).nanoseconds) * 1e-9
+
+    def _stale_cols(self, now: Time) -> List[float]:
+        """Pairs (age_sec, stale_flag) aligned with CSV header order."""
+
+        def pair(last: Optional[Time], thresh: float, enabled: bool) -> List[float]:
+            if not enabled:
+                return [float("nan"), float("nan")]
+            age = self._age_sec(now, last)
+            if math.isnan(age):
+                return [float("nan"), 1.0]
+            return [age, 1.0 if age > thresh else 0.0]
+
+        out: List[float] = []
+        out += pair(self._t_last_joint, self._th_js, True)
+        out += pair(self._t_last_cart, self._th_cv, self._sub_cart)
+        out += pair(self._t_last_odom, self._th_odom, self._sub_odom)
+        out += pair(self._t_last_ee, self._th_ee, self._sub_ee)
+        out += pair(self._t_last_tgt, self._th_tgt, self._sub_tgt)
+        out += pair(self._t_last_wrench, self._th_wr, self._sub_wrench)
+        out += pair(self._t_last_wbc_joint, self._th_wbc_j, self._sub_wbc_j)
+        out += pair(self._t_last_wbc_twist, self._th_wbc_v, self._sub_wbc_v)
+        out += pair(self._t_last_state_joint, self._th_st_js, self._sub_st_js)
+        return out
+
     def _tick(self) -> None:
         nan = float("nan")
         wall = time.time()
-        ros = self.get_clock().now().nanoseconds * 1e-9
+        now = self.get_clock().now()
+        ros = now.nanoseconds * 1e-9
 
+        ee_speed_lin = nan
         if self._ee is not None:
             p = self._ee.pose.position
             q = self._ee.pose.orientation
             ee_row = [p.x, p.y, p.z, q.w, q.x, q.y, q.z]
+            cur = (float(p.x), float(p.y), float(p.z))
+            if self._log_prev_ros_t is not None and self._log_prev_ee_pos is not None:
+                dt = ros - self._log_prev_ros_t
+                if dt > 1e-6:
+                    ox, oy, oz = self._log_prev_ee_pos
+                    ee_speed_lin = math.hypot(cur[0] - ox, cur[1] - oy, cur[2] - oz) / dt
+            self._log_prev_ros_t = ros
+            self._log_prev_ee_pos = cur
         else:
             ee_row = [nan] * 7
+            self._log_prev_ros_t = None
+            self._log_prev_ee_pos = None
 
         if self._tgt is not None:
             p = self._tgt.pose.position
@@ -169,7 +362,9 @@ class Pr2MotionLogger(Node):
             joint_row.append(self._jpos.get(jn, nan))
             joint_row.append(self._jvel.get(jn, nan))
 
-        row = [wall, ros] + ee_row + tgt_row + self._wrench + joint_row
+        stale_extra = self._stale_cols(now)
+        extra = [float(self._base_latched), ee_speed_lin] + stale_extra
+        row = [wall, ros] + ee_row + tgt_row + self._wrench + self._cart_vel + extra + joint_row
         self._writer.writerow([f"{v:.6f}" if not math.isnan(v) else "nan" for v in row])
         self._row_count += 1
 

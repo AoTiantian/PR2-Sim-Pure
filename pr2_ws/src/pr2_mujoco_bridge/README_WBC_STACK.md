@@ -6,15 +6,17 @@
 
 ## 框图 ↔ 节点
 
-| 框图模块 | 节点（可执行名） | 话题 / 说明 |
-|----------|------------------|-------------|
-| 状态估计 | `pr2_state_estimator` | `joint_states`+`odom` → `state/joint_states`、`state/odom`，并发布 `state/base_twist`、`state/base_acceleration` |
-| 导纳（可选） | `pr2_admittance_controller`（兼容名：`pr2_admittance_stub`） | 订阅 `wbc/external_wrench`，按 6 轴导纳动力学输出 `wbc/base_acceleration`（`Accel`） |
-| 零空间（可选） | `pr2_null_space_stub` | 读取 `state/joint_states` 自动捕获/发布 `wbc/q_nominal`（含 `kp/kd/max_effort`） |
-| WBC 协调器 | `pr2_wbc_coordinator` | 汇总 `wbc/reference/*` + `wbc/q_nominal`，叠加次级姿态保持力矩，输出 `cmd_vel` + `joint_commands`（带超时保护） |
-| 底座积分器 | `pr2_base_accel_integrator` | `wbc/base_acceleration`（`Accel`）→ `wbc/reference/cmd_vel` |
-| 手臂 dynamics 映射 | （经协调器） | 向 `wbc/reference/joint_command` 发 `JointState.effort`（可与 null-space 力矩叠加） |
-| 夹爪 | （经 WBC） | 向 `wbc/reference/gripper_position` 发 `Float64` 或 `joint_command.position` |
+
+| 框图模块           | 节点（可执行名）                                               | 话题 / 说明                                                                                                    |
+| -------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| 状态估计           | `pr2_state_estimator`                                  | `joint_states`+`odom` → `state/joint_states`、`state/odom`，并发布 `state/base_twist`、`state/base_acceleration` |
+| 导纳（可选）         | `pr2_admittance_controller`（兼容名：`pr2_admittance_stub`） | 订阅 `wbc/external_wrench`，按 6 轴导纳动力学输出 `wbc/base_acceleration`（`Accel`）                                     |
+| 零空间（可选）        | `pr2_null_space_stub`                                  | 读取 `state/joint_states` 自动捕获/发布 `wbc/q_nominal`（含 `kp/kd/max_effort`）                                      |
+| WBC 协调器        | `pr2_wbc_coordinator`                                  | 汇总 `wbc/reference/`* + `wbc/q_nominal`，叠加次级姿态保持力矩，输出 `cmd_vel` + `joint_commands`（带超时保护）                   |
+| 底座积分器          | `pr2_base_accel_integrator`                            | `wbc/base_acceleration`（`Accel`）→ `wbc/reference/cmd_vel`                                                  |
+| 手臂 dynamics 映射 | （经协调器）                                                 | 向 `wbc/reference/joint_command` 发 `JointState.effort`（可与 null-space 力矩叠加）                                  |
+| 夹爪             | （经 WBC）                                                | 向 `wbc/reference/gripper_position` 发 `Float64` 或 `joint_command.position`                                  |
+
 
 ## WBC 协调器输入 / 输出（实装）
 
@@ -46,22 +48,22 @@ ros2 launch pr2_mujoco_bridge pr2_mobile_manipulator_stack.launch.py
 
 1. **仿真**（`demo_motion:=false`）
 2. **WBC 协调器**
-3. **发给底盘**（二选一）  
-   - 直接：`ros2 topic pub /wbc/reference/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.2, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"`  
-   - 或先加速度再积分：启动 `pr2_base_accel_integrator`，向 `wbc/base_acceleration` 发 `Accel`
+3. **发给底盘**（二选一）
+  - 直接：`ros2 topic pub /wbc/reference/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.2, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"`  
+  - 或先加速度再积分：启动 `pr2_base_accel_integrator`，向 `wbc/base_acceleration` 发 `Accel`
 4. **IK 接到 WBC**（不要直接发 `/joint_commands`，避免与协调器冲突）：
 
 ```bash
 ros2 run pr2_mujoco_bridge pr2_left_arm_ik --ros-args -p joint_command_topic:=wbc/reference/joint_command
 ```
 
-5. **夹爪**（可选）
+1. **夹爪**（可选）
 
 ```bash
 ros2 topic pub /wbc/reference/gripper_position std_msgs/msg/Float64 "{data: 0.3}"
 ```
 
-6. **导纳 + 底座积分器（可选）**
+1. **导纳 + 底座积分器（可选）**
 
 ```bash
 ros2 run pr2_mujoco_bridge pr2_admittance_controller
@@ -119,6 +121,7 @@ ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py
 上面脚本默认调用 `pr2_admittance_validation_omni.launch.py`（预设 +X/+Y/-X/-Y 分段施力）。
 
 该 launch 会自动启动：
+
 - `pr2_mujoco_sim`（`demo_motion=false`）
 - `pr2_state_estimator`
 - `pr2_wbc_coordinator`（`nullspace_enable=false`）
@@ -145,6 +148,7 @@ ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py \
 ```
 
 参数含义：
+
 - `duration_sec`：虚拟外力的作用时长（秒）
 - `force_start_sec`：开始施力时刻（秒）
 - `settle_after_sec`：卸载后继续观察衰减的时长（秒）
@@ -156,11 +160,12 @@ ros2 launch pr2_mujoco_bridge pr2_admittance_validation.launch.py \
 1. 先等待系统稳定（默认 `force_start_sec=2s`）
 2. 在 `wbc/external_wrench` 注入虚拟力 step（默认 `force_x=30N`，持续 `duration_sec`）
 3. 统计峰值响应：
-   - `peak|wbc/base_acceleration.linear.x|`
-   - `peak|cmd_vel.linear.x|`
+  - `peak|wbc/base_acceleration.linear.x|`
+  - `peak|cmd_vel.linear.x|`
 4. 到达总时长 `force_start_sec + duration_sec + settle_after_sec` 后打印 `PASS/FAIL` 并自动退出
 
 默认通过阈值（可在节点参数中修改）：
+
 - `min_peak_accel_x = 0.12`
 - `min_peak_cmd_vx = 0.06`
 - `min_peak_accel_planar = 0.12`（分段多方向模式下使用）
@@ -251,3 +256,4 @@ ros2 launch pr2_mujoco_bridge pr2_arm_admittance_validation.launch.py \
 3. **最后边界**：增大一维施力（`force_x`），确认位移限幅和力矩上限都能生效
 
 > 当前 `pr2_arm_admittance_validation.launch.py` 默认已使用“稳态优先”参数（导纳与 IK 都更保守），用于减少剧烈抖动与过冲。
+

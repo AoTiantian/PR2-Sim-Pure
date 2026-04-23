@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="820" viewBox="0 0 1500 820">
+  <defs>
+    <style><![CDATA[
+      .bg { fill: #0b0f14; }
+      .box { fill: #111822; stroke: #8b949e; stroke-width: 2; }
+      .box2 { fill: #0f1f33; stroke: #58a6ff; stroke-width: 2; }
+      .box3 { fill: #2a1b0f; stroke: #ffb86c; stroke-width: 2; }
+      .box4 { fill: #0f2416; stroke: #7ee787; stroke-width: 2; }
+      .title { font: 700 18px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; fill: #e6edf3; }
+      .text  { font: 14px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; fill: #e6edf3; }
+      .small { font: 12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; fill: #c9d1d9; }
+      .topic { font: 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; fill: #79c0ff; }
+      .topic2{ font: 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; fill: #ffb86c; }
+      .topic3{ font: 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; fill: #7ee787; }
+      .arrow { stroke: #c9d1d9; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .dashed { stroke-dasharray: 6 5; }
+    ]]></style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#c9d1d9" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1500" height="820" class="bg"/>
+
+  <text x="40" y="44" class="title">PR2 left-arm admittance validation (velocity-based) - runtime ROS topics</text>
+  <text x="40" y="70" class="small">Command: <tspan class="topic">bash src/pr2_mujoco_bridge/scripts/run_arm_admittance_validation.sh</tspan> -&gt; <tspan class="topic">ros2 launch pr2_mujoco_bridge pr2_arm_admittance_validation.launch.py</tspan></text>
+
+  <!-- pr2_mujoco_sim -->
+  <rect x="60" y="120" width="310" height="160" rx="14" ry="14" class="box4"/>
+  <text x="80" y="150" class="title">pr2_mujoco_sim</text>
+  <text x="80" y="176" class="text">MuJoCo sim bridge</text>
+  <text x="80" y="202" class="small">sub: <tspan class="topic3">joint_commands</tspan></text>
+  <text x="80" y="224" class="small">pub: <tspan class="topic3">joint_states</tspan>, <tspan class="topic3">odom</tspan> (+tf)</text>
+
+  <!-- pr2_ee_pose_publisher -->
+  <rect x="60" y="330" width="310" height="120" rx="14" ry="14" class="box"/>
+  <text x="80" y="360" class="title">pr2_ee_pose_publisher</text>
+  <text x="80" y="386" class="text">FK from joint_states + odom</text>
+  <text x="80" y="412" class="small">pub: <tspan class="topic">ee_pose</tspan> (frame_id=odom)</text>
+
+  <!-- pr2_state_estimator -->
+  <rect x="60" y="500" width="310" height="150" rx="14" ry="14" class="box"/>
+  <text x="80" y="530" class="title">pr2_state_estimator</text>
+  <text x="80" y="556" class="text">republish state/*</text>
+  <text x="80" y="582" class="small">sub: <tspan class="topic3">joint_states</tspan>, <tspan class="topic3">odom</tspan></text>
+  <text x="80" y="606" class="small">pub: <tspan class="topic">state/joint_states</tspan>, <tspan class="topic">state/odom</tspan></text>
+  <text x="80" y="628" class="small">     <tspan class="topic">state/base_twist</tspan>, <tspan class="topic">state/base_acceleration</tspan></text>
+
+  <!-- pr2_arm_admittance_controller -->
+  <rect x="520" y="170" width="360" height="170" rx="14" ry="14" class="box2"/>
+  <text x="540" y="200" class="title">pr2_arm_admittance_controller</text>
+  <text x="540" y="226" class="text">admittance: wrench + ee_pose -&gt; cart vel</text>
+  <text x="540" y="252" class="small">sub: <tspan class="topic2">wbc/arm_external_wrench</tspan>, <tspan class="topic">ee_pose</tspan></text>
+  <text x="540" y="276" class="small">pub: <tspan class="topic">arm_cartesian_velocity</tspan></text>
+  <text x="540" y="300" class="small">pub: <tspan class="topic">base_pose_latched</tspan> (Bool)</text>
+
+  <!-- pr2_left_arm_ik -->
+  <rect x="980" y="170" width="420" height="170" rx="14" ry="14" class="box2"/>
+  <text x="1000" y="200" class="title">pr2_left_arm_ik</text>
+  <text x="1000" y="226" class="text">velocity IK: Twist -&gt; joint reference</text>
+  <text x="1000" y="252" class="small">sub: <tspan class="topic">arm_cartesian_velocity</tspan> + <tspan class="topic3">joint_states</tspan> + <tspan class="topic3">odom</tspan></text>
+  <text x="1000" y="276" class="small">pub: <tspan class="topic">wbc/reference/joint_command</tspan></text>
+
+  <!-- pr2_wbc_coordinator -->
+  <rect x="980" y="410" width="420" height="180" rx="14" ry="14" class="box3"/>
+  <text x="1000" y="440" class="title">pr2_wbc_coordinator</text>
+  <text x="1000" y="466" class="text">refs -&gt; joint_commands</text>
+  <text x="1000" y="492" class="small">sub: <tspan class="topic">wbc/reference/joint_command</tspan></text>
+  <text x="1000" y="514" class="small">sub: <tspan class="topic">state/joint_states</tspan> (nullspace)</text>
+  <text x="1000" y="536" class="small">sub (optional): <tspan class="topic">wbc/reference/cmd_vel</tspan></text>
+  <text x="1000" y="560" class="small">pub: <tspan class="topic2">joint_commands</tspan></text>
+
+  <!-- pr2_arm_admittance_validator -->
+  <rect x="520" y="410" width="360" height="160" rx="14" ry="14" class="box3"/>
+  <text x="540" y="440" class="title">pr2_arm_admittance_validator</text>
+  <text x="540" y="466" class="text">test: publish virtual wrench + check metrics</text>
+  <text x="540" y="492" class="small">pub: <tspan class="topic2">wbc/arm_external_wrench</tspan></text>
+  <text x="540" y="514" class="small">sub: <tspan class="topic">ee_pose</tspan>, <tspan class="topic2">joint_commands</tspan></text>
+  <text x="540" y="536" class="small">defaults: force_window=[3,13]s, total=16s</text>
+
+  <!-- pr2_motion_logger -->
+  <rect x="520" y="620" width="880" height="150" rx="14" ry="14" class="box"/>
+  <text x="540" y="650" class="title">pr2_motion_logger</text>
+  <text x="540" y="676" class="text">CSV in /workspace/logs (timestamp in Asia/Shanghai)</text>
+  <text x="540" y="702" class="small">sub: <tspan class="topic">ee_pose</tspan>, <tspan class="topic2">wbc/arm_external_wrench</tspan>, <tspan class="topic">arm_cartesian_velocity</tspan>, <tspan class="topic3">joint_states</tspan>, <tspan class="topic3">odom</tspan>, ...</text>
+
+  <!-- Arrows -->
+  <path d="M 215 280 L 215 330" class="arrow"/>
+  <text x="230" y="312" class="topic3">joint_states, odom</text>
+
+  <path d="M 215 280 L 215 500" class="arrow"/>
+  <text x="230" y="460" class="topic3">joint_states, odom</text>
+
+  <path d="M 370 575 L 980 500" class="arrow"/>
+  <text x="520" y="520" class="topic">state/joint_states</text>
+
+  <path d="M 980 560 L 370 230" class="arrow"/>
+  <text x="620" y="360" class="topic2">joint_commands</text>
+
+  <path d="M 370 390 L 520 255" class="arrow"/>
+  <text x="395" y="335" class="topic">ee_pose</text>
+
+  <path d="M 700 410 L 700 350" class="arrow"/>
+  <text x="715" y="388" class="topic2">wbc/arm_external_wrench</text>
+
+  <path d="M 880 255 L 980 255" class="arrow"/>
+  <text x="900" y="240" class="topic">arm_cartesian_velocity</text>
+
+  <path d="M 1190 340 L 1190 410" class="arrow"/>
+  <text x="1205" y="382" class="topic">wbc/reference/joint_command</text>
+
+  <path d="M 370 200 L 980 220" class="arrow dashed"/>
+  <text x="610" y="198" class="topic3">joint_states, odom</text>
+
+  <path d="M 370 410 L 520 500" class="arrow"/>
+  <text x="395" y="470" class="topic">ee_pose</text>
+
+  <path d="M 980 490 L 880 490" class="arrow"/>
+  <text x="885" y="476" class="topic2">joint_commands</text>
+
+  <path d="M 700 350 L 700 620" class="arrow dashed"/>
+  <text x="715" y="486" class="topic">base_pose_latched, arm_cartesian_velocity, ee_pose, joint_states, odom</text>
+
+  <path d="M 1190 590 L 1190 620" class="arrow dashed"/>
+  <text x="1205" y="610" class="topic">wbc/reference/joint_command, state/joint_states</text>
+
+  <text x="40" y="804" class="small">Note: wbc/reference/cmd_vel is usually unused in this arm-only validation run, but WBC and logger can still subscribe.</text>
+</svg>
+

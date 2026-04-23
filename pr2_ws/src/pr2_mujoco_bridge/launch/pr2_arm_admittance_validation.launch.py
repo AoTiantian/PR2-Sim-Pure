@@ -14,10 +14,10 @@ def generate_launch_description() -> LaunchDescription:
         "model_path",
         default_value="/workspace/unitree_mujoco/unitree_robots/pr2/scene.xml",
     )
-    viewer_arg = DeclareLaunchArgument("use_viewer", default_value="false")
-    force_arg = DeclareLaunchArgument("force_x", default_value="25.0")
-    duration_arg = DeclareLaunchArgument("duration_sec", default_value="5.0")
-    force_start_arg = DeclareLaunchArgument("force_start_sec", default_value="4.5")
+    viewer_arg = DeclareLaunchArgument("use_viewer", default_value="true")
+    force_arg = DeclareLaunchArgument("force_x", default_value="10.0")
+    duration_arg = DeclareLaunchArgument("duration_sec", default_value="10.0")
+    force_start_arg = DeclareLaunchArgument("force_start_sec", default_value="5.0")
     # Keep optional schedule for advanced tests; empty means single-step mode.
     force_schedule_arg = DeclareLaunchArgument(
         "force_schedule_json",
@@ -81,6 +81,9 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
+    # Admittance + IK: base latch uses speed gate (see pr2_arm_admittance_controller). After runs are stable,
+    # tune in order: latch thresholds/durations -> max_joint_velocity_rad_s -> damping_linear/stiffness_linear
+    # -> max_linear_velocity -> velocity_integration_gain with torque_kp/torque_kd and damping_lambda.
     arm_adm = Node(
         package="pr2_mujoco_bridge",
         executable="pr2_arm_admittance_controller",
@@ -89,22 +92,24 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[
             {"input_wrench_topic": "wbc/arm_external_wrench"},
             {"input_pose_topic": "ee_pose"},
-            {"output_target_pose_topic": "ik_target_pose"},
+            {"output_twist_topic": "arm_cartesian_velocity"},
             {"target_frame_id": "odom"},
             {"enable_wrench_frame_transform": True},
             {"strict_frame_consistency": True},
             {"suppress_output_on_tf_failure": True},
             {"freeze_orientation": True},
-            # Allow 3s for initial_qpos to settle before latching EE pose.
-            {"base_pose_latch_delay_sec": 3.0},
-            # Stability-first preset: reduce transient overshoot and rebound.
-            {"wrench_lpf_alpha": 0.12},
-            {"mass_linear": [8.0, 8.0, 10.0]},
-            {"damping_linear": [140.0, 140.0, 180.0]},
+            {"base_pose_latch_delay_sec": 0.5},
+            {"base_pose_latch_max_wait_sec": 8.0},
+            {"ee_linear_speed_thresh": 0.02},
+            {"ee_angular_speed_thresh": 0.15},
+            {"latch_stable_duration_sec": 0.3},
+            {"ee_speed_estimate_lpf_alpha": 0.25},
+            {"base_pose_latched_topic": "base_pose_latched"},
+            {"wrench_lpf_alpha": 0.15},
+            {"damping_linear": [320.0, 320.0, 400.0]},
             {"stiffness_linear": [260.0, 260.0, 320.0]},
-            {"max_linear_velocity": [0.08, 0.08, 0.06]},
-            {"max_linear_displacement": [0.03, 0.03, 0.025]},
-            {"mass_angular": [1.8, 1.8, 1.2]},
+            {"max_linear_velocity": [0.12, 0.12, 0.10]},
+            {"max_linear_displacement": [0.06, 0.06, 0.05]},
             {"damping_angular": [24.0, 24.0, 18.0]},
             {"stiffness_angular": [35.0, 35.0, 20.0]},
         ],
@@ -117,15 +122,14 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         parameters=[
             {"joint_command_topic": "wbc/reference/joint_command"},
-            {"target_topic": "ik_target_pose"},
+            {"control_mode": "velocity_tracking"},
+            {"cartesian_velocity_topic": "arm_cartesian_velocity"},
+            {"velocity_cmd_timeout_sec": 0.15},
             {"joint_state_topic": "joint_states"},
             {"odom_topic": "odom"},
             {"use_orientation": False},
             {"require_odom_sync": True},
             {"state_timeout_sec": 0.20},
-            # Hold the arm at a sensible resting pose before admittance latch fires.
-            # This prevents the arm from free-falling during the pre-latch window.
-            # Pose: arm slightly out to the side, elbow bent, at shoulder height.
             {"initial_joint_pose_json": (
                 '{"l_shoulder_pan_joint":0.4,'
                 '"l_shoulder_lift_joint":-0.2,'
@@ -135,19 +139,15 @@ def generate_launch_description() -> LaunchDescription:
                 '"l_wrist_flex_joint":-0.3,'
                 '"l_wrist_roll_joint":0.0}'
             )},
-            # IK torque gains: gravity comp handles the static load, so PD only needs
-            # to correct small tracking errors.  Low Kp prevents oscillation;
-            # max_torque=300 lets gravity comp (qfrc_bias ~100-200Nm) pass through.
             {"damping_lambda": 0.15},
-            {"step_size": 0.08},
-            {"max_step_rad": 0.025},
-            {"torque_kp": 35.0},        # low: gravity comp carries the arm; PD just corrects drift
-            {"torque_kd": 15.0},        # ζ≈1.27 → stable, no oscillation
-            {"max_torque": 300.0},      # per-joint ctrlrange is the real cap
-            {"tau_rate_limit": 800.0},  # moderate: fast enough, not destabilising
-            {"tau_lpf_alpha": 0.45},    # balanced: responsive but not jerky
-            # Soft joint limits: clamp DLS q_next to initial_joint_pose ± 0.35 rad.
-            # Prevents shoulder_lift from drifting to -0.52 rad (causing +0.62m Z error).
+            {"max_joint_velocity_rad_s": 10.0},
+            {"torque_kp": 120.0},
+            {"torque_kd": 18.0},
+            {"velocity_integration_gain": 1.0},
+            {"velocity_sync_alpha": 0.3},
+            {"max_torque": 300.0},
+            {"tau_rate_limit": 600.0},
+            {"tau_lpf_alpha": 0.35},
             {"joint_soft_limit_margin": 0.35},
         ],
     )
@@ -185,10 +185,21 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[
             {"ee_pose_topic": "ee_pose"},
             {"ik_target_topic": "ik_target_pose"},
+            {"cartesian_velocity_topic": "arm_cartesian_velocity"},
+            {"base_pose_latched_topic": "base_pose_latched"},
             {"wrench_topic": "wbc/arm_external_wrench"},
             {"joint_state_topic": "joint_states"},
+            {"odom_topic": "odom"},
+            {"wbc_joint_ref_topic": "wbc/reference/joint_command"},
+            {"wbc_cmd_vel_topic": "wbc/reference/cmd_vel"},
+            {"state_joint_topic": "state/joint_states"},
+            {"stale_joint_states_sec": 0.20},
+            {"stale_cart_vel_sec": 0.15},
+            {"stale_odom_sec": 0.20},
+            {"stale_wbc_joint_ref_sec": 0.15},
+            {"stale_wbc_cmd_vel_sec": 0.15},
+            {"stale_state_joint_sec": 0.25},
             {"log_rate_hz": 50.0},
-            # output_path: empty string means auto-generated /tmp/pr2_motion_<ts>.csv
             {"output_path": ParameterValue(LaunchConfiguration("log_path"), value_type=str)},
         ],
     )
@@ -219,4 +230,3 @@ def generate_launch_description() -> LaunchDescription:
             shutdown_on_done,
         ]
     )
-
