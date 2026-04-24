@@ -508,9 +508,19 @@ def main() -> None:
         node.run()
     except KeyboardInterrupt:
         pass
+    except RuntimeError as exc:
+        if rclpy.ok():
+            raise exc
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+        except (KeyboardInterrupt, RuntimeError):
+            pass
+        if rclpy.ok():
+            try:
+                rclpy.shutdown()
+            except RuntimeError:
+                pass
 
 
 if __name__ == "__main__":
