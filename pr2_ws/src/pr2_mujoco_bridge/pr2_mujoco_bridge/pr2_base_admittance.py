@@ -17,6 +17,7 @@ from pr2_mujoco_bridge.admittance_core import (
     AxisGains,
     apply_deadband,
     clip_norm,
+    settle_admittance_state,
 )
 
 
@@ -53,10 +54,17 @@ class BaseAdmittanceNode(Node):
         self.declare_parameter("yaw_deadband", 0.04)
         self.declare_parameter("track_gain_linear", 3.2)
         self.declare_parameter("track_gain_angular", 2.6)
+        self.declare_parameter("return_track_gain_linear", 5.0)
+        self.declare_parameter("return_track_gain_angular", 3.4)
         self.declare_parameter("max_linear_speed", 0.16)
         self.declare_parameter("max_angular_speed", 0.28)
         self.declare_parameter("max_linear_displacement", 0.18)
         self.declare_parameter("max_yaw_displacement", 0.35)
+        self.declare_parameter("settle_linear_displacement_epsilon", 0.004)
+        self.declare_parameter("settle_yaw_displacement_epsilon", 0.008)
+        self.declare_parameter("settle_linear_velocity_epsilon", 0.004)
+        self.declare_parameter("settle_angular_velocity_epsilon", 0.01)
+        self.declare_parameter("idle_velocity_decay", 1.0)
 
         self._input_topic = str(self.get_parameter("input_topic").value)
         self._odom_topic = str(self.get_parameter("odom_topic").value)
@@ -86,6 +94,12 @@ class BaseAdmittanceNode(Node):
         self._yaw_deadband = float(self.get_parameter("yaw_deadband").value)
         self._track_gain_linear = float(self.get_parameter("track_gain_linear").value)
         self._track_gain_angular = float(self.get_parameter("track_gain_angular").value)
+        self._return_track_gain_linear = float(
+            self.get_parameter("return_track_gain_linear").value
+        )
+        self._return_track_gain_angular = float(
+            self.get_parameter("return_track_gain_angular").value
+        )
         self._max_linear_speed = float(self.get_parameter("max_linear_speed").value)
         self._max_angular_speed = float(self.get_parameter("max_angular_speed").value)
         self._max_linear_displacement = float(
@@ -94,6 +108,23 @@ class BaseAdmittanceNode(Node):
         self._max_yaw_displacement = float(
             self.get_parameter("max_yaw_displacement").value
         )
+        self._settle_disp_eps = np.array(
+            [
+                self.get_parameter("settle_linear_displacement_epsilon").value,
+                self.get_parameter("settle_linear_displacement_epsilon").value,
+                self.get_parameter("settle_yaw_displacement_epsilon").value,
+            ],
+            dtype=np.float64,
+        )
+        self._settle_vel_eps = np.array(
+            [
+                self.get_parameter("settle_linear_velocity_epsilon").value,
+                self.get_parameter("settle_linear_velocity_epsilon").value,
+                self.get_parameter("settle_angular_velocity_epsilon").value,
+            ],
+            dtype=np.float64,
+        )
+        self._idle_velocity_decay = float(self.get_parameter("idle_velocity_decay").value)
 
         self._raw_wrench_body = np.zeros(3, dtype=np.float64)
         self._filtered_wrench_body = np.zeros(3, dtype=np.float64)
@@ -153,6 +184,7 @@ class BaseAdmittanceNode(Node):
         )
         if abs(self._filtered_wrench_body[2]) < self._yaw_deadband:
             self._filtered_wrench_body[2] = 0.0
+        return_mode = not np.any(np.abs(self._filtered_wrench_body) > 1.0e-9)
 
         cy = math.cos(self._current_yaw)
         sy = math.sin(self._current_yaw)
@@ -177,20 +209,33 @@ class BaseAdmittanceNode(Node):
         vel = self._admittance_state.velocity.copy()
         vel[:2] = clip_norm(vel[:2], self._max_linear_speed)
         vel[2] = float(np.clip(vel[2], -self._max_angular_speed, self._max_angular_speed))
-        self._admittance_state = AdmittanceState(displacement=disp, velocity=vel)
+        self._admittance_state = settle_admittance_state(
+            state=AdmittanceState(displacement=disp, velocity=vel),
+            force=self._filtered_wrench_body,
+            force_epsilon=np.full(3, 1.0e-9, dtype=np.float64),
+            displacement_epsilon=self._settle_disp_eps,
+            velocity_epsilon=self._settle_vel_eps,
+            idle_velocity_decay=self._idle_velocity_decay,
+        )
 
         desired_pose_world = self._equilibrium_pose_world + self._admittance_state.displacement
         pose_error_world = desired_pose_world - self._current_pose_world
         pose_error_world[2] = _wrap_angle(pose_error_world[2])
 
+        track_gain_linear = (
+            self._return_track_gain_linear if return_mode else self._track_gain_linear
+        )
+        track_gain_angular = (
+            self._return_track_gain_angular if return_mode else self._track_gain_angular
+        )
         vel_world = (
             self._admittance_state.velocity[:2]
-            + self._track_gain_linear * pose_error_world[:2]
+            + track_gain_linear * pose_error_world[:2]
         )
         vel_world = clip_norm(vel_world, self._max_linear_speed)
         vel_body = rot_world_body.T @ vel_world
 
-        wz = self._admittance_state.velocity[2] + self._track_gain_angular * pose_error_world[2]
+        wz = self._admittance_state.velocity[2] + track_gain_angular * pose_error_world[2]
         wz = float(np.clip(wz, -self._max_angular_speed, self._max_angular_speed))
 
         cmd = Twist()

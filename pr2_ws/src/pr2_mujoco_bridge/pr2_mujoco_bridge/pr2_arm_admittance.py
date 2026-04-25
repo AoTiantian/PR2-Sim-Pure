@@ -21,7 +21,8 @@ from pr2_mujoco_bridge.admittance_core import (
     limit_joint_velocity_near_limits,
     rotate_body_vector_to_world,
     rotate_world_vector_to_body,
-    solve_dls_velocity,
+    settle_admittance_state,
+    solve_dls_velocity_with_nullspace,
 )
 
 
@@ -68,12 +69,18 @@ class ArmAdmittanceNode(Node):
         self.declare_parameter("ee_vel_max", 0.035)
         self.declare_parameter("ee_disp_max", 0.12)
         self.declare_parameter("ee_track_gain", 8.0)
+        self.declare_parameter("return_track_gain", 12.0)
+        self.declare_parameter("return_ee_vel_max", 0.05)
+        self.declare_parameter("nullspace_gain", 0.0)
         self.declare_parameter("qdot_des_max", 0.22)
+        self.declare_parameter("return_qdot_des_max", 0.3)
         self.declare_parameter("qdot_smoothing_alpha", 0.3)
         self.declare_parameter("joint_limit_margin", 0.12)
         self.declare_parameter("torque_kp", 18.0)
         self.declare_parameter("torque_kd", 18.0)
         self.declare_parameter("max_torque", 60.0)
+        self.declare_parameter("settle_displacement_epsilon", 0.003)
+        self.declare_parameter("settle_velocity_epsilon", 0.003)
         self.declare_parameter("wrench_topic", "wbc/arm/external_wrench")
         self.declare_parameter("joint_command_topic", "joint_commands")
         self.declare_parameter("ee_pose_topic", "wbc/arm/ee_pose_log")
@@ -133,12 +140,20 @@ class ArmAdmittanceNode(Node):
         self._ee_vel_max = float(self.get_parameter("ee_vel_max").value)
         self._ee_disp_max = float(self.get_parameter("ee_disp_max").value)
         self._ee_track_gain = float(self.get_parameter("ee_track_gain").value)
+        self._return_track_gain = float(self.get_parameter("return_track_gain").value)
+        self._return_ee_vel_max = float(self.get_parameter("return_ee_vel_max").value)
+        self._nullspace_gain = float(self.get_parameter("nullspace_gain").value)
         self._qdot_des_max = float(self.get_parameter("qdot_des_max").value)
+        self._return_qdot_des_max = float(self.get_parameter("return_qdot_des_max").value)
         self._qdot_smoothing_alpha = float(self.get_parameter("qdot_smoothing_alpha").value)
         self._joint_limit_margin = float(self.get_parameter("joint_limit_margin").value)
         self._kp = float(self.get_parameter("torque_kp").value)
         self._kd = float(self.get_parameter("torque_kd").value)
         self._max_torque = float(self.get_parameter("max_torque").value)
+        settle_disp_eps = float(self.get_parameter("settle_displacement_epsilon").value)
+        settle_vel_eps = float(self.get_parameter("settle_velocity_epsilon").value)
+        self._settle_disp_eps = np.full(3, settle_disp_eps, dtype=np.float64)
+        self._settle_vel_eps = np.full(3, settle_vel_eps, dtype=np.float64)
 
         wrench_topic = str(self.get_parameter("wrench_topic").value)
         cmd_topic = str(self.get_parameter("joint_command_topic").value)
@@ -212,6 +227,7 @@ class ArmAdmittanceNode(Node):
         self._q_cur = np.zeros(len(self._joints), dtype=np.float64)
         self._qdot_cur = np.zeros(len(self._joints), dtype=np.float64)
         self._q_dot_cmd = np.zeros(len(self._joints), dtype=np.float64)
+        self._q_home = np.zeros(len(self._joints), dtype=np.float64)
         self._full_state: Dict[str, tuple[float, float]] = {}
         self._ee_home_cmd: np.ndarray | None = None
         self._home_capture_deadline_ns: int | None = None
@@ -250,6 +266,7 @@ class ArmAdmittanceNode(Node):
 
         if not self._initialized and all(name in self._full_state for name in self._joints):
             self._initialized = True
+            self._q_home = self._q_cur.copy()
             self._home_capture_deadline_ns = self.get_clock().now().nanoseconds + int(
                 self._home_capture_duration * 1e9
             )
@@ -333,6 +350,7 @@ class ArmAdmittanceNode(Node):
         now_ns = self.get_clock().now().nanoseconds
         if self._home_capture_deadline_ns is not None and now_ns <= self._home_capture_deadline_ns:
             self._ee_home_cmd = ee_pos_cmd.copy()
+            self._q_home = self._q_cur.copy()
             self._adm_state = AdmittanceState.zeros(dim=3)
             self._force_filtered[:] = 0.0
             self._q_dot_cmd[:] = 0.0
@@ -343,6 +361,7 @@ class ArmAdmittanceNode(Node):
 
         if self._ee_home_cmd is None:
             self._ee_home_cmd = ee_pos_cmd.copy()
+            self._q_home = self._q_cur.copy()
 
         force_cmd = self._force_in_command_frame(base_rot)
         self._force_filtered = (
@@ -353,6 +372,7 @@ class ArmAdmittanceNode(Node):
             self._active_mask * self._force_filtered,
             self._force_deadband,
         )
+        return_mode = not np.any(np.abs(force_cmd) > 1.0e-9)
 
         self._adm_state = self._adm_state.step(force=force_cmd, gains=self._gains, dt=self._dt)
         disp = np.clip(
@@ -364,14 +384,29 @@ class ArmAdmittanceNode(Node):
         for axis in range(3):
             if abs(disp[axis]) >= self._ee_disp_max and vel[axis] * disp[axis] > 0.0:
                 vel[axis] = 0.0
-        self._adm_state = AdmittanceState(displacement=disp, velocity=vel)
+        self._adm_state = settle_admittance_state(
+            state=AdmittanceState(displacement=disp, velocity=vel),
+            force=force_cmd,
+            force_epsilon=np.full(3, 1.0e-9, dtype=np.float64),
+            displacement_epsilon=self._settle_disp_eps,
+            velocity_epsilon=self._settle_vel_eps,
+        )
 
         ee_des_cmd = self._ee_home_cmd + self._adm_state.displacement
-        ee_vel_cmd = self._adm_state.velocity + self._ee_track_gain * (ee_des_cmd - ee_pos_cmd)
-        ee_vel_cmd = clip_norm(ee_vel_cmd, self._ee_vel_max)
+        track_gain = self._return_track_gain if return_mode else self._ee_track_gain
+        ee_vel_max = self._return_ee_vel_max if return_mode else self._ee_vel_max
+        qdot_des_max = self._return_qdot_des_max if return_mode else self._qdot_des_max
+        ee_vel_cmd = self._adm_state.velocity + track_gain * (ee_des_cmd - ee_pos_cmd)
+        ee_vel_cmd = clip_norm(ee_vel_cmd, ee_vel_max)
 
-        qdot_target = solve_dls_velocity(jac_cmd, ee_vel_cmd, damping_lambda=self._lam)
-        qdot_target = np.clip(qdot_target, -self._qdot_des_max, self._qdot_des_max)
+        qdot_target = solve_dls_velocity_with_nullspace(
+            jacobian=jac_cmd,
+            ee_velocity=ee_vel_cmd,
+            damping_lambda=self._lam,
+            q_error=self._q_home - self._q_cur,
+            nullspace_gain=self._nullspace_gain,
+        )
+        qdot_target = np.clip(qdot_target, -qdot_des_max, qdot_des_max)
         qdot_target = limit_joint_velocity_near_limits(
             q=self._q_cur,
             qdot_des=qdot_target,

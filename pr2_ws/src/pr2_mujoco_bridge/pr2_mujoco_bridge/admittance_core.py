@@ -34,6 +34,23 @@ def solve_dls_velocity(
     return jac.T @ np.linalg.solve(jac @ jac.T + reg, vel)
 
 
+def solve_dls_velocity_with_nullspace(
+    jacobian: np.ndarray,
+    ee_velocity: np.ndarray,
+    damping_lambda: float,
+    q_error: np.ndarray,
+    nullspace_gain: float,
+) -> np.ndarray:
+    qdot_task = solve_dls_velocity(jacobian, ee_velocity, damping_lambda)
+    if nullspace_gain <= 0.0:
+        return qdot_task
+
+    jac = _as_array(jacobian)
+    jac_pinv = np.linalg.pinv(jac)
+    null_proj = np.eye(jac.shape[1], dtype=np.float64) - jac_pinv @ jac
+    return qdot_task + nullspace_gain * (null_proj @ _as_array(q_error))
+
+
 def limit_joint_velocity_near_limits(
     q: np.ndarray,
     qdot_des: np.ndarray,
@@ -53,6 +70,26 @@ def limit_joint_velocity_near_limits(
         elif q_arr[i] > qmax_arr[i] - margin and limited[i] > 0.0:
             limited[i] *= max(0.0, (qmax_arr[i] - q_arr[i]) / margin)
     return limited
+
+
+def advance_bounded_reference(
+    q_ref: np.ndarray,
+    q_cur: np.ndarray,
+    qdot_cmd: np.ndarray,
+    dt: float,
+    qmin: np.ndarray,
+    qmax: np.ndarray,
+    max_error: float,
+) -> np.ndarray:
+    q_ref_arr = _as_array(q_ref)
+    q_cur_arr = _as_array(q_cur)
+    qmin_arr = _as_array(qmin)
+    qmax_arr = _as_array(qmax)
+    q_next = np.clip(q_ref_arr + _as_array(qdot_cmd) * dt, qmin_arr, qmax_arr)
+    if max_error > 0.0:
+        q_next = np.clip(q_next, q_cur_arr - max_error, q_cur_arr + max_error)
+        q_next = np.clip(q_next, qmin_arr, qmax_arr)
+    return q_next
 
 
 def rotate_world_vector_to_body(
@@ -82,6 +119,36 @@ def project_end_effector_wrench_to_base(
     out[1] = force[1] * planar_scale
     out[5] = (pos[0] * force[1] - pos[1] * force[0]) * yaw_scale
     return out
+
+
+def settle_admittance_state(
+    state: "AdmittanceState",
+    force: np.ndarray,
+    force_epsilon: np.ndarray,
+    displacement_epsilon: np.ndarray,
+    velocity_epsilon: np.ndarray,
+    idle_velocity_decay: float = 1.0,
+) -> "AdmittanceState":
+    force_arr = np.abs(_as_array(force))
+    force_eps = _as_array(force_epsilon)
+    disp_eps = _as_array(displacement_epsilon)
+    vel_eps = _as_array(velocity_epsilon)
+
+    displacement = state.displacement.copy()
+    velocity = state.velocity.copy()
+    idle_mask = force_arr <= force_eps
+
+    if idle_velocity_decay < 1.0:
+        velocity[idle_mask] *= max(idle_velocity_decay, 0.0)
+
+    settle_mask = (
+        idle_mask
+        & (np.abs(displacement) <= disp_eps)
+        & (np.abs(velocity) <= vel_eps)
+    )
+    displacement[settle_mask] = 0.0
+    velocity[settle_mask] = 0.0
+    return AdmittanceState(displacement=displacement, velocity=velocity)
 
 
 @dataclass(frozen=True)
