@@ -30,6 +30,7 @@ import math
 import os
 import threading
 import time
+from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 import mujoco
@@ -52,6 +53,79 @@ def _classify_actuator(name: str) -> str:
     if name.endswith("_tau"):
         return "effort"
     return "effort"
+
+
+@dataclass(frozen=True)
+class CoordinatedDemoProfile:
+    """Smooth scripted whole-body motion for the visible demo.
+
+    The sign convention follows the existing PR2 MuJoCo actuator setup in this
+    branch: positive wheel velocity drives the robot toward the table in the
+    scene, while negative shoulder/elbow torques lift/fold the left arm into a
+    pre-grasp posture.
+    """
+
+    phase: str
+    base_forward_speed: float
+    steer_angle: float
+    arm_lift_fraction: float
+    shoulder_pan_torque: float
+    shoulder_lift_torque: float
+    elbow_flex_torque: float
+    wrist_flex_torque: float
+    gripper_command: float
+
+
+def _smoothstep(x: float) -> float:
+    x = min(1.0, max(0.0, x))
+    return x * x * (3.0 - 2.0 * x)
+
+
+def coordinated_demo_profile(t: float, gripper_max: float = 0.5) -> CoordinatedDemoProfile:
+    """Return a coordinated approach/pre-grasp/retreat profile.
+
+    Cycle timeline (16 s):
+      0-8 s   approach the table while lifting/folding the left arm;
+      8-10 s  pause in a grasp-ready pose and close the gripper;
+      10-14 s retreat while keeping the arm high;
+      14-16 s reopen/reset for the next cycle.
+    """
+
+    cycle_t = float(t) % 16.0
+    if cycle_t < 8.0:
+        phase = "approach_and_raise"
+        lift = _smoothstep(cycle_t / 7.0)
+        base_speed = 1.45 * math.sin(math.pi * min(cycle_t, 8.0) / 8.0)
+        gripper = gripper_max * (0.88 - 0.18 * lift)
+    elif cycle_t < 10.0:
+        phase = "pregrasp_pause"
+        lift = 1.0
+        base_speed = 0.0
+        close = _smoothstep((cycle_t - 8.0) / 2.0)
+        gripper = gripper_max * (0.70 - 0.56 * close)
+    elif cycle_t < 14.0:
+        phase = "retreat_with_object"
+        lift = 1.0 - 0.15 * _smoothstep((cycle_t - 10.0) / 4.0)
+        base_speed = -1.05 * math.sin(math.pi * (cycle_t - 10.0) / 4.0)
+        gripper = gripper_max * 0.12
+    else:
+        phase = "reset"
+        reset = _smoothstep((cycle_t - 14.0) / 2.0)
+        lift = 0.85 * (1.0 - reset)
+        base_speed = 0.0
+        gripper = gripper_max * (0.12 + 0.76 * reset)
+
+    return CoordinatedDemoProfile(
+        phase=phase,
+        base_forward_speed=base_speed,
+        steer_angle=0.0,
+        arm_lift_fraction=lift,
+        shoulder_pan_torque=10.0 * math.sin(0.7 * cycle_t),
+        shoulder_lift_torque=-14.0 - 52.0 * lift,
+        elbow_flex_torque=-6.0 - 24.0 * lift,
+        wrist_flex_torque=5.0 - 17.0 * lift,
+        gripper_command=min(gripper_max, max(0.0, gripper)),
+    )
 
 
 class Pr2MujocoSim(Node):
@@ -229,10 +303,16 @@ class Pr2MujocoSim(Node):
             self._demo_gripper_max = float(gr[gi][1])
         else:
             self._demo_gripper_max = 0.5
+        # Coordinated demo actuators: approach the scene table while raising the
+        # left arm into a pre-grasp posture instead of exciting one joint at a
+        # time. This makes the built-in demo visually communicate base/arm
+        # coordination.
+        self._demo_l_shoulder_pan_act = self._actuator_id_by_name("l_shoulder_pan_tau")
         self._demo_l_shoulder_lift_act = self._actuator_id_by_name(
             "l_shoulder_lift_tau"
         )
         self._demo_l_elbow_act = self._actuator_id_by_name("l_elbow_flex_tau")
+        self._demo_l_wrist_flex_act = self._actuator_id_by_name("l_wrist_flex_tau")
 
         self.get_logger().info(
             f"已加载 MuJoCo 模型: {model_path} (nu={self._nu})"
@@ -325,38 +405,32 @@ class Pr2MujocoSim(Node):
                 target[wid] = pattern[k]
 
     def _apply_pr2_demo_motion(self, ctrl: np.ndarray, t: float) -> None:
-        """与 scripts/pr2_sim.py 中 apply_advanced_separated_control 相同逻辑。"""
+        """Apply a coordinated table-approach/pre-grasp whole-body demo."""
         ctrl[:] = 0.0
         if self._demo_torso >= 0:
             ctrl[self._demo_torso] = 500.0
-        if self._demo_gripper_l >= 0:
-            ctrl[self._demo_gripper_l] = (
-                (math.sin(2.0 * t) + 1.0) / 2.0
-            ) * self._demo_gripper_max
-        if self._demo_arm_specs:
-            arm_step = int(t / 3.0) % len(self._demo_arm_specs)
-            target_act, _name = self._demo_arm_specs[arm_step]
-            base_torque = (
-                -45.0 if target_act == self._demo_l_shoulder_lift_act else 0.0
-            )
-            amplitude = (
-                20.0 if target_act == self._demo_l_elbow_act else 40.0
-            )
-            ctrl[target_act] = base_torque + amplitude * math.sin(3.0 * t)
 
-        base_phase = int(t / 6.0) % 2
+        profile = coordinated_demo_profile(t, self._demo_gripper_max)
+
+        if self._demo_gripper_l >= 0:
+            ctrl[self._demo_gripper_l] = profile.gripper_command
+
+        for aid, torque in (
+            (self._demo_l_shoulder_pan_act, profile.shoulder_pan_torque),
+            (self._demo_l_shoulder_lift_act, profile.shoulder_lift_torque),
+            (self._demo_l_elbow_act, profile.elbow_flex_torque),
+            (self._demo_l_wrist_flex_act, profile.wrist_flex_torque),
+        ):
+            if aid >= 0:
+                ctrl[aid] = torque
+
         steer_ids = self._demo_steer_ids
         wheel_ids = self._demo_wheel_ids
         if len(steer_ids) >= 4 and len(wheel_ids) >= 8:
-            if base_phase == 0:
-                steer_ang = 0.0
-            else:
-                steer_ang = 1.5708
             for sid in steer_ids:
-                ctrl[sid] = steer_ang
-            wcmd = 2.0 * math.sin(1.0 * t)
+                ctrl[sid] = profile.steer_angle
             for wid in wheel_ids:
-                ctrl[wid] = wcmd
+                ctrl[wid] = profile.base_forward_speed
 
     def _fill_joint_state(self, msg: JointState) -> None:
         msg.name = []
@@ -480,6 +554,14 @@ class Pr2MujocoSim(Node):
         if self._use_viewer:
             try:
                 with mujoco.viewer.launch_passive(self._model, self._data) as viewer:
+                    # Keep the recorded demo focused on the whole PR2, the desk,
+                    # and the left arm workspace instead of relying on MuJoCo's
+                    # default passive-viewer camera.
+                    viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                    viewer.cam.lookat[:] = np.array([-1.2, 0.0, 1.0], dtype=np.float64)
+                    viewer.cam.distance = 6.0
+                    viewer.cam.azimuth = 140.0
+                    viewer.cam.elevation = -17.0
                     self.get_logger().info(
                         "MuJoCo 被动 viewer 已启动（关闭窗口即退出节点）"
                     )
