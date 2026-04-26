@@ -301,22 +301,22 @@
                 <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0 0.8 0 1" mesh="upper_arm"/>
                 <body name="l_elbow_flex_link" pos="0.4 0 0">
                   <inertial pos="0.01014 0.00032 -0.01211" quat="0.308784 0.646797 0.639077 0.279083" mass="1.90327" diaginertia="0.00441852 0.00396477 0.00308977"/>
-                  <joint name="l_elbow_flex_joint" pos="0 0 0" axis="0 1 0" range="-2.3213 0" actuatorfrcrange="-300 300" damping="1"/>
+                  <joint name="l_elbow_flex_joint" pos="0 0 0" axis="0 1 0" range="-2.3213 0" actuatorfrcrange="-600 600" damping="1"/>
                   <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.7 0.7 0.7 1" mesh="elbow_flex"/>
                   <body name="l_forearm_roll_link">
                     <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
-                    <joint name="l_forearm_roll_joint" pos="0 0 0" axis="1 0 0" range="-300 300" actuatorfrcrange="-30 30" damping="0.1"/>
+                    <joint name="l_forearm_roll_joint" pos="0 0 0" axis="1 0 0" range="-300 300" actuatorfrcrange="-60 60" damping="0.1"/>
                     <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="forearm_roll"/>
                     <body name="l_forearm_link">
                       <inertial pos="0.18791 -0.00017 -0.00912" quat="-0.000586594 0.726286 -0.00396869 0.687381" mass="2.57968" diaginertia="0.0166326 0.0150775 0.00360892"/>
                       <geom type="mesh" contype="2" conaffinity="2" group="1" density="0" rgba="0.7 0.7 0.7 1" mesh="forearm"/>
                       <body name="l_wrist_flex_link" pos="0.321 0 0">
                         <inertial pos="-0.00157 0 -0.00075" quat="0.695976 0.696411 -0.12356 0.123942" mass="0.61402" diaginertia="0.000652771 0.000643391 0.000198244"/>
-                        <joint name="l_wrist_flex_joint" pos="0 0 0" axis="0 1 0" range="-2.18 0" actuatorfrcrange="-200 200" damping="0.1"/>
+                        <joint name="l_wrist_flex_joint" pos="0 0 0" axis="0 1 0" range="-2.18 0" actuatorfrcrange="-300 300" damping="0.1"/>
                         <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.7 0.7 0.7 1" mesh="wrist_flex"/>
                         <body name="l_wrist_roll_link">
                           <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
-                          <joint name="l_wrist_roll_joint" pos="0 0 0" axis="1 0 0" range="-300 300" actuatorfrcrange="-10 10" damping="0.1"/>
+                          <joint name="l_wrist_roll_joint" pos="0 0 0" axis="1 0 0" range="-300 300" actuatorfrcrange="-30 30" damping="0.1"/>
                           <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="wrist_roll"/>
                           <body name="l_wrist_ft_link" pos="0.03 0 0">
                             <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-6 1e-6 1e-6"/>
@@ -418,13 +418,13 @@
     <motor name="r_wrist_roll_tau"     joint="r_wrist_roll_joint" gear="1" ctrllimited="true" ctrlrange="-10 10"/>
 
     <!-- Left arm: switch to velocity actuators (pure velocity-bottom mode). -->
-    <velocity name="l_shoulder_pan_vel"   joint="l_shoulder_pan_joint"   kv="50" ctrllimited="true" ctrlrange="-8 8"/>
-    <velocity name="l_shoulder_lift_vel"  joint="l_shoulder_lift_joint"  kv="100" ctrllimited="true" ctrlrange="-8 8"/>
-    <velocity name="l_upper_arm_roll_vel" joint="l_upper_arm_roll_joint" kv="12" ctrllimited="true" ctrlrange="-10 10"/>
-    <velocity name="l_elbow_flex_vel"     joint="l_elbow_flex_joint"     kv="40" ctrllimited="true" ctrlrange="-8 8"/>
-    <velocity name="l_forearm_roll_vel"   joint="l_forearm_roll_joint"   kv="10" ctrllimited="true" ctrlrange="-12 12"/>
-    <velocity name="l_wrist_flex_vel"     joint="l_wrist_flex_joint"     kv="8" ctrllimited="true" ctrlrange="-10 10"/>
-    <velocity name="l_wrist_roll_vel"     joint="l_wrist_roll_joint"     kv="6" ctrllimited="true" ctrlrange="-12 12"/>
+    <velocity name="l_shoulder_pan_vel"   joint="l_shoulder_pan_joint"   kv="35" ctrllimited="true" ctrlrange="-8 8" forcerange="-30 30"/>
+    <velocity name="l_shoulder_lift_vel"  joint="l_shoulder_lift_joint"  kv="120" ctrllimited="true" ctrlrange="-8 8" forcerange="-800 800"/>
+    <velocity name="l_upper_arm_roll_vel" joint="l_upper_arm_roll_joint" kv="8" ctrllimited="true" ctrlrange="-10 10" forcerange="-100 100"/>
+    <velocity name="l_elbow_flex_vel"     joint="l_elbow_flex_joint"     kv="70" ctrllimited="true" ctrlrange="-8 8" forcerange="-600 600"/>
+    <velocity name="l_forearm_roll_vel"   joint="l_forearm_roll_joint"   kv="10" ctrllimited="true" ctrlrange="-12 12" forcerange="-60 60"/>
+    <velocity name="l_wrist_flex_vel"     joint="l_wrist_flex_joint"     kv="8" ctrllimited="true" ctrlrange="-10 10" forcerange="-300 300"/>
+    <velocity name="l_wrist_roll_vel"     joint="l_wrist_roll_joint"     kv="6" ctrllimited="true" ctrlrange="-12 12" forcerange="-30 30"/>
   </actuator>
 
   <sensor>

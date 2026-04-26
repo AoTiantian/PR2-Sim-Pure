@@ -12,7 +12,10 @@
 
 from __future__ import annotations
 
+import json
 import math
+import os
+import time
 from copy import deepcopy
 from typing import List
 
@@ -190,6 +193,7 @@ class Pr2ArmAdmittanceController(Node):
 
         self._base_pose: PoseStamped | None = None
         self._latest_pose: PoseStamped | None = None
+        self._wrench_was_active = False
 
         # Base-pose latch speed gate (timer-rate samples of ee_pose)
         self._latch_prev_pos: np.ndarray | None = None
@@ -222,6 +226,32 @@ class Pr2ArmAdmittanceController(Node):
         self.create_subscription(PoseStamped, self._in_pose_topic, self._on_pose, 20)
         self.create_timer(self._dt, self._tick)
 
+        # #region agent log
+        self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._dbg_tick = 0
+        self._dbg_last_mono = 0.0
+
+        def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            try:
+                os.makedirs(os.path.dirname(self._dbg_log_path), exist_ok=True)
+                payload = {
+                    "sessionId": "33df0d",
+                    "runId": os.environ.get("DEBUG_RUN_ID", "pre-fix"),
+                    "hypothesisId": hypothesis_id,
+                    "location": "pr2_arm_admittance_controller.py",
+                    "message": message,
+                    "data": data,
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open(self._dbg_log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            except OSError:
+                pass
+
+        self._dbg_write = _dbg_write
+        self._dbg_write("H0_DebugInit", "admittance init", {"pid": int(os.getpid())})
+        # #endregion agent log
+
         self.get_logger().info(
             "arm admittance (velocity-based) ready: "
             f"{self._in_wrench_topic}+{self._in_pose_topic} -> {self._out_twist_topic}, "
@@ -230,6 +260,9 @@ class Pr2ArmAdmittanceController(Node):
             f"stable={self._latch_stable_duration_sec:.2f}s, "
             f"v_lin<{self._ee_lin_speed_thresh:.4f}m/s, max_wait={self._base_pose_latch_max_wait_sec:.1f}s)"
         )
+
+        self._ee_prev_pos: np.ndarray | None = None
+        self._ee_prev_t: float | None = None
 
     def _on_wrench(self, msg: WrenchStamped) -> None:
         self._wrench_raw[0] = float(msg.wrench.force.x)
@@ -376,6 +409,19 @@ class Pr2ArmAdmittanceController(Node):
         self._dx_ang[1] = float(cur.orientation.y) - float(base.orientation.y)
         self._dx_ang[2] = float(cur.orientation.z) - float(base.orientation.z)
 
+        ee_pos_cur = np.array(
+            [float(cur.position.x), float(cur.position.y), float(cur.position.z)],
+            dtype=np.float64,
+        )
+        ee_dt_pose = 0.0
+        ee_v_inst_lin = np.zeros(3, dtype=np.float64)
+        if self._ee_prev_t is not None:
+            ee_dt_pose = float(t - self._ee_prev_t)
+            if ee_dt_pose > 1e-6 and self._ee_prev_pos is not None:
+                ee_v_inst_lin = (ee_pos_cur - self._ee_prev_pos) / ee_dt_pose
+        self._ee_prev_pos = ee_pos_cur
+        self._ee_prev_t = t
+
         # 力传感器 LPF
         self._wrench_filtered = (
             self._alpha * self._wrench_raw + (1.0 - self._alpha) * self._wrench_filtered
@@ -383,6 +429,7 @@ class Pr2ArmAdmittanceController(Node):
         wr, tf_ok = self._transform_wrench_to_target(self._wrench_filtered.copy())
         if self._suppress_output_on_tf_failure and not tf_ok:
             return
+        f_post_tf_pre_dz = [float(wr[0]), float(wr[1]), float(wr[2])]
 
         # 死区
         for i in range(3):
@@ -409,17 +456,36 @@ class Pr2ArmAdmittanceController(Node):
             m.vector.z = float(self._dx_lin[2])
             self._pub_dbg_dx.publish(m)
 
-        if self._hold_until_wrench_active:
-            fn = float(np.linalg.norm(wr[:3]))
-            tn = float(np.linalg.norm(wr[3:]))
-            if fn < self._wrench_activate_force_norm and tn < self._wrench_activate_torque_norm:
-                out = TwistStamped()
-                out.header.stamp = self.get_clock().now().to_msg()
-                out.header.frame_id = self._target_frame_id or pose_frame
-                self._pub_twist.publish(out)
-                return
+        fn = float(np.linalg.norm(wr[:3]))
+        tn = float(np.linalg.norm(wr[3:]))
+        hold_gate = (
+            self._hold_until_wrench_active
+            and fn < self._wrench_activate_force_norm
+            and tn < self._wrench_activate_torque_norm
+        )
+        wrench_is_active = self._hold_until_wrench_active and (not hold_gate)
+
+        # When hold-until-wrench is enabled, the spring term (-K*dx) can generate lateral
+        # components (y/z) even if the applied wrench is purely x. To make "apply x force"
+        # produce an initially x-aligned motion, rebase the spring reference exactly once
+        # when wrench first becomes active (dx := 0 at force onset).
+        if wrench_is_active and (not self._wrench_was_active):
+            dx_prev = [float(self._dx_lin[0]), float(self._dx_lin[1]), float(self._dx_lin[2])]
+            self._base_pose = deepcopy(self._latest_pose)
+            self._dx_lin[:] = 0.0
+            self._dx_ang[:] = 0.0
+            # #region agent log
+            self._dbg_write(
+                "H4_AdmittanceAxesCoupling",
+                "rebase at wrench activation",
+                {"fn": fn, "tn": tn, "dx_lin_prev": dx_prev},
+            )
+            # #endregion agent log
+        self._wrench_was_active = bool(wrench_is_active)
 
         # 一阶导纳：Δẋ = B_d⁻¹ · (F_ext - K_d · Δx)
+        # NOTE: compute AFTER optional rebase at wrench activation so -K*dx does not
+        # inject lateral components immediately at force onset.
         dxdot_lin = np.zeros(3, dtype=np.float64)
         dxdot_ang = np.zeros(3, dtype=np.float64)
         for i in range(3):
@@ -431,6 +497,58 @@ class Pr2ArmAdmittanceController(Node):
                 ba = max(self._b_ang[i], 1e-6)
                 dxdot_ang[i] = (wr[3 + i] - self._k_ang[i] * self._dx_ang[i]) / ba
                 dxdot_ang[i] = _clamp(dxdot_ang[i], -self._max_ang_vel[i], self._max_ang_vel[i])
+
+        # #region agent log
+        self._dbg_tick += 1
+        now_m = time.monotonic()
+        if now_m - self._dbg_last_mono > 0.25:
+            self._dbg_last_mono = now_m
+            self._dbg_write(
+                "H4_AdmittanceAxesCoupling",
+                "admittance tick",
+                {
+                    "base_latched": True,
+                    "pose_frame": pose_frame,
+                    "target_frame": self._target_frame_id,
+                    "wrench_frame": self._wrench_frame,
+                    "tf_ok": bool(tf_ok),
+                    "F_lp_in_wrench_frame": [
+                        float(self._wrench_filtered[0]),
+                        float(self._wrench_filtered[1]),
+                        float(self._wrench_filtered[2]),
+                    ],
+                    "F_post_tf_pre_dz": f_post_tf_pre_dz,
+                    "F_used_lin": [float(wr[0]), float(wr[1]), float(wr[2])],
+                    "dx_lin": [float(self._dx_lin[0]), float(self._dx_lin[1]), float(self._dx_lin[2])],
+                    "k_lin": [float(self._k_lin[0]), float(self._k_lin[1]), float(self._k_lin[2])],
+                    "b_lin": [float(self._b_lin[0]), float(self._b_lin[1]), float(self._b_lin[2])],
+                    "spring_lin": [
+                        float(self._k_lin[0] * self._dx_lin[0]),
+                        float(self._k_lin[1] * self._dx_lin[1]),
+                        float(self._k_lin[2] * self._dx_lin[2]),
+                    ],
+                    "v_cmd_lin": [float(dxdot_lin[0]), float(dxdot_lin[1]), float(dxdot_lin[2])],
+                    "ee_v_inst_lin": [
+                        float(ee_v_inst_lin[0]),
+                        float(ee_v_inst_lin[1]),
+                        float(ee_v_inst_lin[2]),
+                    ],
+                    "ee_pos_cur": [float(ee_pos_cur[0]), float(ee_pos_cur[1]), float(ee_pos_cur[2])],
+                    "ee_dt_pose": float(ee_dt_pose),
+                    "hold_until_wrench": bool(self._hold_until_wrench_active),
+                    "hold_gate_active": bool(hold_gate),
+                    "wrench_fn": fn,
+                    "wrench_tn": tn,
+                },
+            )
+        # #endregion agent log
+
+        if hold_gate:
+            out = TwistStamped()
+            out.header.stamp = self.get_clock().now().to_msg()
+            out.header.frame_id = self._target_frame_id or pose_frame
+            self._pub_twist.publish(out)
+            return
 
         out = TwistStamped()
         out.header.stamp = self.get_clock().now().to_msg()

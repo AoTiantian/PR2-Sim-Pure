@@ -64,6 +64,35 @@ class Pr2MujocoSim(Node):
     def __init__(self) -> None:
         super().__init__("pr2_mujoco_sim")
 
+        # #region agent log
+        self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._dbg_last_mono = 0.0
+
+        def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            try:
+                import json as _json
+                os.makedirs(os.path.dirname(self._dbg_log_path) or ".", exist_ok=True)
+
+                payload = {
+                    "sessionId": "33df0d",
+                    "runId": os.environ.get("DEBUG_RUN_ID", "vel_mismatch"),
+                    "hypothesisId": hypothesis_id,
+                    "location": "pr2_sim_ros.py",
+                    "message": message,
+                    "data": data,
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open(self._dbg_log_path, "a", encoding="utf-8") as f:
+                    f.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+
+        self._dbg_write = _dbg_write
+        self._dbg_write("H0_DebugInit", "sim init", {"pid": int(os.getpid())})
+        # #endregion agent log
+
+        self._dbg_prev_act_sign: Dict[str, int] = {}
+
         self.declare_parameter(
             "model_path",
             "/workspace/unitree_mujoco/unitree_robots/pr2/scene.xml",
@@ -247,6 +276,22 @@ class Pr2MujocoSim(Node):
         self._torso_vadr: int | None = None
         self._torso_lock_qpos: float | None = None
         self._torso_lock_pending = False
+
+        # Cache dof indices for key left arm joints (for debug only).
+        self._dbg_arm_joints = [
+            "l_shoulder_pan_joint",
+            "l_shoulder_lift_joint",
+            "l_upper_arm_roll_joint",
+            "l_elbow_flex_joint",
+            "l_forearm_roll_joint",
+            "l_wrist_flex_joint",
+            "l_wrist_roll_joint",
+        ]
+        self._dbg_joint_vadr: Dict[str, int] = {}
+        for jn in self._dbg_arm_joints:
+            jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid >= 0:
+                self._dbg_joint_vadr[jn] = int(self._model.jnt_dofadr[jid])
 
         # 内置演示用执行器（与 scripts/pr2_sim.py 一致，按名称解析）
         self._demo_gripper_l = self._actuator_id_by_name("l_gripper_pos")
@@ -661,6 +706,59 @@ class Pr2MujocoSim(Node):
                 needs_forward = True
             if needs_forward:
                 mujoco.mj_forward(self._model, self._data)
+
+            # #region agent log
+            now_m = time.monotonic()
+            if now_m - self._dbg_last_mono > 1.0:
+                self._dbg_last_mono = now_m
+                # For each arm joint: read commanded velocity target (from ctrl) for velocity actuators,
+                # actual qvel, and generalized forces (bias/actuator).
+                jdbg = {}
+                for jn in self._dbg_arm_joints:
+                    vadr = self._dbg_joint_vadr.get(jn, None)
+                    if vadr is None:
+                        continue
+                    # commanded target: first velocity actuator mapped to this joint (if any)
+                    vcmd = None
+                    fr = None
+                    for aid, kind in self._joint_to_act.get(jn, []):
+                        if kind == "velocity":
+                            vcmd = float(self._data.ctrl[aid])
+                            try:
+                                fr = [float(self._model.actuator_forcerange[aid][0]), float(self._model.actuator_forcerange[aid][1])]
+                            except Exception:
+                                fr = None
+                            break
+                    act = float(self._data.qfrc_actuator[vadr])
+                    act_abs = float(abs(act))
+                    sat = False
+                    sat_margin = None
+                    if fr is not None:
+                        hi = float(max(abs(fr[0]), abs(fr[1])))
+                        sat_margin = float(hi - act_abs)
+                        sat = bool(sat_margin <= 1e-6)
+                    prev_s = self._dbg_prev_act_sign.get(jn, 0)
+                    cur_s = 1 if act > 1e-9 else (-1 if act < -1e-9 else 0)
+                    flip = bool(prev_s != 0 and cur_s != 0 and cur_s != prev_s)
+                    if cur_s != 0:
+                        self._dbg_prev_act_sign[jn] = cur_s
+                    jdbg[jn] = {
+                        "vcmd": vcmd,
+                        "vact": float(self._data.qvel[vadr]),
+                        "bias": float(self._data.qfrc_bias[vadr]),
+                        "act": act,
+                        "forcerange": fr,
+                        "v_err": (float(vcmd) - float(self._data.qvel[vadr])) if vcmd is not None else None,
+                        "sat": sat,
+                        "sat_margin": sat_margin,
+                        "act_sign_flip": flip,
+                    }
+                self._dbg_write(
+                    "H3_ActuatorOrMappingLimits",
+                    "sim step arm velocity/forces",
+                    {"sim_time": float(self._data.time), "joints": jdbg},
+                )
+            # #endregion agent log
 
             stamp = self.get_clock().now().to_msg()
             js.header.stamp = stamp

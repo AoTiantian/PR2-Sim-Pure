@@ -45,12 +45,12 @@ def generate_launch_description() -> LaunchDescription:
             # Start arm at the same configuration as initial_joint_pose_json to
             # eliminate large initial convergence motions and Coriolis disturbances.
             {"initial_qpos_json": (
-                '{"l_shoulder_pan_joint":0.0,'
-                '"l_shoulder_lift_joint":0.0,'
+                '{"l_shoulder_pan_joint":0.35,'
+                '"l_shoulder_lift_joint":0.90,'
                 '"l_upper_arm_roll_joint":0.0,'
-                '"l_elbow_flex_joint":0.0,'
+                '"l_elbow_flex_joint":-1.30,'
                 '"l_forearm_roll_joint":0.0,'
-                '"l_wrist_flex_joint":0.0,'
+                '"l_wrist_flex_joint":-0.40,'
                 '"l_wrist_roll_joint":0.0}'
             )},
         ],
@@ -141,15 +141,16 @@ def generate_launch_description() -> LaunchDescription:
             {"state_timeout_sec": 0.20},
             # Keep a joint-space hold loop always-on (superposed with admittance) to resist gravity
             # in velocity-bottom mode. See pr2_left_arm_ik pre_command_hold_kp.
-            {"pre_command_hold_kp": 2.0},
-            {"pre_command_hold_kd": 0.8},
+            {"pre_command_hold_kp": 1.2},
+            {"pre_command_hold_kd": 1.0},
+            {"pre_command_hold_max_joint_vel_rad_s": 1.0},
             {"initial_joint_pose_json": (
-                '{"l_shoulder_pan_joint":0.0,'
-                '"l_shoulder_lift_joint":0.0,'
+                '{"l_shoulder_pan_joint":0.35,'
+                '"l_shoulder_lift_joint":0.90,'
                 '"l_upper_arm_roll_joint":0.0,'
-                '"l_elbow_flex_joint":0.0,'
+                '"l_elbow_flex_joint":-1.30,'
                 '"l_forearm_roll_joint":0.0,'
-                '"l_wrist_flex_joint":0.0,'
+                '"l_wrist_flex_joint":-0.40,'
                 '"l_wrist_roll_joint":0.0}'
             )},
             {"damping_lambda": 0.15},

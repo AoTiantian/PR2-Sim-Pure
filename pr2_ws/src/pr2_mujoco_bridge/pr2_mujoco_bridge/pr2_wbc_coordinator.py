@@ -11,7 +11,9 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
+import time
 from typing import Dict, List, Optional, Tuple
 
 import rclpy
@@ -33,6 +35,31 @@ def _is_nan(x: float) -> bool:
 class Pr2WbcCoordinator(Node):
     def __init__(self) -> None:
         super().__init__("pr2_wbc_coordinator")
+
+        # #region agent log
+        self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._dbg_last_mono = 0.0
+
+        def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            try:
+                os.makedirs(os.path.dirname(self._dbg_log_path) or ".", exist_ok=True)
+                payload = {
+                    "sessionId": "33df0d",
+                    "runId": os.environ.get("DEBUG_RUN_ID", "vel_mismatch"),
+                    "hypothesisId": hypothesis_id,
+                    "location": "pr2_wbc_coordinator.py",
+                    "message": message,
+                    "data": data,
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open(self._dbg_log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+
+        self._dbg_write = _dbg_write
+        self._dbg_write("H0_DebugInit", "wbc init", {"pid": int(os.getpid())})
+        # #endregion agent log
 
         self.declare_parameter("output_cmd_vel", "cmd_vel")
         self.declare_parameter("output_joint_command", "joint_commands")
@@ -246,6 +273,28 @@ class Pr2WbcCoordinator(Node):
         out.velocity = vel
         out.effort = eff
         self._pub_joint.publish(out)
+
+        # #region agent log
+        now_m = time.monotonic()
+        if now_m - self._dbg_last_mono > 1.0:
+            self._dbg_last_mono = now_m
+            # Summarize commanded velocities (if any) for left arm.
+            arm_names = [n for n in names if n.startswith("l_") and n.endswith("_joint")]
+            vmap = {names[i]: vel[i] if i < len(vel) else float("nan") for i in range(len(names))}
+            arm_vel = [float(vmap.get(n, float("nan"))) for n in arm_names]
+            finite = [abs(v) for v in arm_vel if v == v]
+            self._dbg_write(
+                "H2_WBCNotPassingVelocity",
+                "wbc publish summary",
+                {
+                    "fresh_joint_ref": bool(fresh_joint),
+                    "n_total": int(len(names)),
+                    "n_arm": int(len(arm_names)),
+                    "arm_peak_abs_vel": float(max(finite) if finite else 0.0),
+                    "nullspace_enable": bool(self._null_en),
+                },
+            )
+        # #endregion agent log
 
 
 def main() -> None:

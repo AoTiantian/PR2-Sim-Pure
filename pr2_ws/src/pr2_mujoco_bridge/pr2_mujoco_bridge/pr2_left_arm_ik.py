@@ -17,6 +17,8 @@ PR2 左臂数值拟运动学（IK）节点。
 from __future__ import annotations
 
 import math
+import os
+import time
 from typing import Dict, List
 
 import mujoco
@@ -53,6 +55,33 @@ def _orientation_error_world(cur_q_wxyz: np.ndarray, tgt_q_wxyz: np.ndarray) -> 
 class Pr2LeftArmIk(Node):
     def __init__(self) -> None:
         super().__init__("pr2_left_arm_ik")
+
+        # #region agent log
+        self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._dbg_last_mono = 0.0
+
+        def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            try:
+                import json as _json
+                os.makedirs(os.path.dirname(self._dbg_log_path) or ".", exist_ok=True)
+
+                payload = {
+                    "sessionId": "33df0d",
+                    "runId": os.environ.get("DEBUG_RUN_ID", "vel_mismatch"),
+                    "hypothesisId": hypothesis_id,
+                    "location": "pr2_left_arm_ik.py",
+                    "message": message,
+                    "data": data,
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open(self._dbg_log_path, "a", encoding="utf-8") as f:
+                    f.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+
+        self._dbg_write = _dbg_write
+        self._dbg_write("H0_DebugInit", "ik init", {"pid": int(os.getpid())})
+        # #endregion agent log
 
         self.declare_parameter(
             "model_path",
@@ -98,10 +127,14 @@ class Pr2LeftArmIk(Node):
         self.declare_parameter("max_joint_velocity_rad_s", 12.0)
         # When no Cartesian velocity command is available, hold at initial_joint_pose_json
         # by commanding joint velocities q̇ = k * (q_init - q). 0 disables this hold.
-        self.declare_parameter("pre_command_hold_kp", 6.0)
+        self.declare_parameter("pre_command_hold_kp", 4.0)
         # Optional D term for the hold loop (velocity feedback): q̇_hold = Kp(q_ref-q) - Kd q̇.
         # Helps damp oscillations in velocity-bottom mode.
-        self.declare_parameter("pre_command_hold_kd", 0.8)
+        self.declare_parameter("pre_command_hold_kd", 0.5)
+        # Limit the magnitude of the *hold* joint velocity term so it won't dominate and
+        # cause q̇_total to be uniformly downscaled (which would also downscale admittance).
+        # 0 disables this cap.
+        self.declare_parameter("pre_command_hold_max_joint_vel_rad_s", 2.0)
         # Per-joint Kp/Kd scale factors as JSON {joint_name: scale}.
         # Wrist/forearm roll joints have small inertia; lower scale prevents oscillation.
         # Default: forearm_roll=0.25, wrist_flex=0.4, wrist_roll=0.25
@@ -274,6 +307,10 @@ class Pr2LeftArmIk(Node):
         self._max_joint_vel_rad_s = float(self.get_parameter("max_joint_velocity_rad_s").value)
         self._pre_hold_kp = max(0.0, float(self.get_parameter("pre_command_hold_kp").value))
         self._pre_hold_kd = max(0.0, float(self.get_parameter("pre_command_hold_kd").value))
+        self._pre_hold_max_joint_vel_rad_s = max(
+            0.0,
+            float(self.get_parameter("pre_command_hold_max_joint_vel_rad_s").value),
+        )
         self._last_qdot_scale_warn_ns = 0
         self._last_qdot_diag_info_ns = 0
         self._last_qdot_scale: float = 1.0
@@ -623,6 +660,14 @@ class Pr2LeftArmIk(Node):
         cmd_effective = (self._cart_vel_cmd is not None) and (cmd_norm > self._vel_cmd_min_norm)
         qdot_hold_raw = self._compute_qdot_hold_if_possible()
 
+        def _cap_qdot_peak(qdot: np.ndarray, peak_limit: float) -> tuple[np.ndarray, float, float]:
+            """Uniformly scale qdot so max(|qdot|) <= peak_limit. Returns (qdot_out, scale, peak_in)."""
+            peak_in = float(np.max(np.abs(qdot))) if qdot.size > 0 else 0.0
+            if peak_limit <= 0.0 or peak_in <= 0.0 or peak_in <= peak_limit:
+                return qdot, 1.0, peak_in
+            s = float(peak_limit / peak_in)
+            return qdot * s, s, peak_in
+
         # Pre-command hold: do not require odom/model state, only joint_states.
         if not cmd_effective:
             if qdot_hold_raw is not None:
@@ -679,11 +724,55 @@ class Pr2LeftArmIk(Node):
 
         # Fresh command: compute and publish joint velocity.
         qdot_raw = self._compute_qdot_from_cartesian_vel(self._cart_vel_cmd)
-        if qdot_hold_raw is None:
+        hold_scale = 1.0
+        hold_peak_in = 0.0
+        qdot_hold = qdot_hold_raw
+        if qdot_hold_raw is not None and self._pre_hold_max_joint_vel_rad_s > 0.0:
+            qdot_hold, hold_scale, hold_peak_in = _cap_qdot_peak(
+                qdot_hold_raw,
+                self._pre_hold_max_joint_vel_rad_s,
+            )
+
+        if qdot_hold is None:
             qdot_total = qdot_raw
         else:
-            qdot_total = qdot_hold_raw + qdot_raw
+            qdot_total = qdot_hold + qdot_raw
         qdot_cmd = self._uniformly_scale_qdot_cmd(qdot_total)
+
+        # #region agent log
+        now_m = time.monotonic()
+        if now_m - self._dbg_last_mono > 1.0:
+            self._dbg_last_mono = now_m
+            hold_norm = float(np.linalg.norm(qdot_hold_raw)) if qdot_hold_raw is not None else 0.0
+            hold_norm_limited = float(np.linalg.norm(qdot_hold)) if qdot_hold is not None else 0.0
+            adm_norm = float(np.linalg.norm(qdot_raw))
+            tot_norm = float(np.linalg.norm(qdot_total))
+            cmd_vx = float(self._cart_vel_cmd[0]) if self._cart_vel_cmd is not None else 0.0
+            cmd_vy = float(self._cart_vel_cmd[1]) if self._cart_vel_cmd is not None else 0.0
+            cmd_vz = float(self._cart_vel_cmd[2]) if self._cart_vel_cmd is not None else 0.0
+            self._dbg_write(
+                "H1_IKScalingOrHold",
+                "velocity_tracking summary",
+                {
+                    "cmd_v": [cmd_vx, cmd_vy, cmd_vz],
+                    "cmd_norm": float(cmd_norm),
+                    "cmd_effective": bool(cmd_effective),
+                    "hold_norm": hold_norm,
+                    "adm_norm": adm_norm,
+                    "total_norm": tot_norm,
+                    "qdot_scale": float(self._last_qdot_scale),
+                    "peak_qdot": float(self._last_qdot_peak_rad_s),
+                    "max_joint_vel": float(self._max_joint_vel_rad_s),
+                    "pre_hold_kp": float(self._pre_hold_kp),
+                    "pre_hold_kd": float(self._pre_hold_kd),
+                    "pre_hold_max_joint_vel": float(self._pre_hold_max_joint_vel_rad_s),
+                    "hold_peak_in": float(hold_peak_in),
+                    "hold_scale": float(hold_scale),
+                    "hold_norm_limited": float(hold_norm_limited),
+                },
+            )
+        # #endregion agent log
+
         now_ns = self.get_clock().now().nanoseconds
         if now_ns - self._last_qdot_diag_info_ns > 2_000_000_000:
             hold_norm = float(np.linalg.norm(qdot_hold_raw)) if qdot_hold_raw is not None else 0.0
