@@ -91,6 +91,31 @@ MuJoCo 场景默认路径（可在节点参数中修改）：
 
 `unitree_mujoco/unitree_robots/pr2/scene.xml`
 
+## AI 编码助手规范
+
+本仓库已经按机器人开发项目配置了项目级 AI guardrails，供 Codex CLI、Claude Code 等工具读取：
+
+| 文件 | 作用 |
+|------|------|
+| `AGENTS.md` | 项目级主规范；Codex CLI 和其他 agent 的首选入口 |
+| `CLAUDE.md` | Claude Code 项目入口，引用 `AGENTS.md` 与 `.claude/rules/*.md` |
+| `.claude/rules/` | Claude Code 分层规则：项目布局、ROS 2 Jazzy、PR2 安全、验收流程 |
+| `scripts/verify_ai_project.sh` | 检查本仓库机器人项目布局和 AI 规范文件是否完整 |
+| `scripts/ai-codex.sh` / `scripts/ai-claude.sh` | 从仓库根目录启动对应 AI 工具的轻量 wrapper |
+
+建议在让 AI 修改代码前先确认当前分支状态：
+
+```bash
+git status --short --branch
+bash scripts/verify_ai_project.sh
+```
+
+涉及控制、力控、顺应、WBC、launch 参数或验证阈值的改动，应同步阅读：
+
+```text
+pr2_ws/src/pr2_mujoco_bridge/README_ACCEPTANCE_FEAT.md
+```
+
 ## 常见问题排查
 
 | 现象 | 处理思路 |
