@@ -291,8 +291,11 @@ class Pr2MujocoSim(Node):
         for aname, label in (
             ("l_shoulder_pan_tau", "左肩-水平"),
             ("l_shoulder_lift_tau", "左肩-抬举"),
+            ("l_upper_arm_roll_tau", "左大臂滚转"),
             ("l_elbow_flex_tau", "左肘"),
-            ("l_wrist_flex_tau", "左腕"),
+            ("l_forearm_roll_tau", "左小臂滚转"),
+            ("l_wrist_flex_tau", "左腕俯仰"),
+            ("l_wrist_roll_tau", "左腕滚转"),
         ):
             aid = self._actuator_id_by_name(aname)
             if aid >= 0:
@@ -305,14 +308,36 @@ class Pr2MujocoSim(Node):
             self._demo_gripper_max = 0.5
         # Coordinated demo actuators: approach the scene table while raising the
         # left arm into a pre-grasp posture instead of exciting one joint at a
-        # time. This makes the built-in demo visually communicate base/arm
-        # coordination.
-        self._demo_l_shoulder_pan_act = self._actuator_id_by_name("l_shoulder_pan_tau")
-        self._demo_l_shoulder_lift_act = self._actuator_id_by_name(
-            "l_shoulder_lift_tau"
-        )
-        self._demo_l_elbow_act = self._actuator_id_by_name("l_elbow_flex_tau")
-        self._demo_l_wrist_flex_act = self._actuator_id_by_name("l_wrist_flex_tau")
+        # time.  Use torque-motor PD + MuJoCo bias-force compensation for all
+        # seven arm joints; otherwise the uncommanded forearm/wrist joints sag
+        # under gravity even when the shoulder looks stable.
+        self._demo_l_arm_pd: List[Tuple[str, int, int, int, float, float]] = []
+        self._arm_pregrasp = {
+            'l_shoulder_pan_joint':    0.55,
+            'l_shoulder_lift_joint':  -0.18,
+            'l_upper_arm_roll_joint':  0.85,
+            'l_elbow_flex_joint':     -1.55,
+            'l_forearm_roll_joint':    0.00,
+            'l_wrist_flex_joint':     -0.55,
+            'l_wrist_roll_joint':      0.00,
+        }
+        _pd_gain_by_joint = {
+            'l_shoulder_pan_joint': (120.0, 18.0),
+            'l_shoulder_lift_joint': (180.0, 28.0),
+            'l_upper_arm_roll_joint': (55.0, 10.0),
+            'l_elbow_flex_joint': (125.0, 18.0),
+            'l_forearm_roll_joint': (28.0, 6.0),
+            'l_wrist_flex_joint': (42.0, 7.0),
+            'l_wrist_roll_joint': (14.0, 4.0),
+        }
+        for jn in self._arm_home:
+            aid = self._actuator_id_by_name(jn.replace('_joint', '_tau'))
+            jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if aid >= 0 and jid >= 0:
+                qadr = int(self._model.jnt_qposadr[jid])
+                dadr = int(self._model.jnt_dofadr[jid])
+                kp, kd = _pd_gain_by_joint[jn]
+                self._demo_l_arm_pd.append((jn, aid, qadr, dadr, kp, kd))
 
         self.get_logger().info(
             f"已加载 MuJoCo 模型: {model_path} (nu={self._nu})"
@@ -415,14 +440,20 @@ class Pr2MujocoSim(Node):
         if self._demo_gripper_l >= 0:
             ctrl[self._demo_gripper_l] = profile.gripper_command
 
-        for aid, torque in (
-            (self._demo_l_shoulder_pan_act, profile.shoulder_pan_torque),
-            (self._demo_l_shoulder_lift_act, profile.shoulder_lift_torque),
-            (self._demo_l_elbow_act, profile.elbow_flex_torque),
-            (self._demo_l_wrist_flex_act, profile.wrist_flex_torque),
-        ):
-            if aid >= 0:
-                ctrl[aid] = torque
+        arm_smooth = profile.arm_lift_fraction
+        for jn, aid, qadr, dadr, kp, kd in self._demo_l_arm_pd:
+            q_home = self._arm_home[jn]
+            q_goal = self._arm_pregrasp[jn]
+            q_des = q_home + (q_goal - q_home) * arm_smooth
+            q = float(self._data.qpos[qadr])
+            dq = float(self._data.qvel[dadr])
+            # qfrc_bias is the generalized force needed to cancel gravity and
+            # velocity-dependent bias at the current state. Adding PD keeps the
+            # torque-controlled PR2 arm from drooping while preserving smooth
+            # motion toward the scripted pre-grasp pose.
+            torque = float(self._data.qfrc_bias[dadr]) + kp * (q_des - q) - kd * dq
+            lo, hi = self._model.actuator_ctrlrange[aid]
+            ctrl[aid] = min(float(hi), max(float(lo), torque))
 
         steer_ids = self._demo_steer_ids
         wheel_ids = self._demo_wheel_ids
