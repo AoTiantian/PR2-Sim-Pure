@@ -13,6 +13,7 @@ from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from std_msgs.msg import Float64MultiArray
 
 
 def _yaw_from_quaternion_xyzw(x: float, y: float, z: float, w: float) -> float:
@@ -39,6 +40,7 @@ class ArmForceInjectorNode(Node):
         self.declare_parameter("wrench_topic", "wbc/arm/external_wrench")
         self.declare_parameter("ee_pose_topic", "wbc/arm/ee_pose_log")
         self.declare_parameter("odom_topic", "odom")
+        self.declare_parameter("admittance_debug_topic", "wbc/arm/admittance_debug")
 
         axis_raw = self.get_parameter("force_axis").value
         self._axis = "y" if axis_raw is True else str(axis_raw).lower()
@@ -54,10 +56,12 @@ class ArmForceInjectorNode(Node):
         wrench_topic = str(self.get_parameter("wrench_topic").value)
         ee_pose_topic = str(self.get_parameter("ee_pose_topic").value)
         odom_topic = str(self.get_parameter("odom_topic").value)
+        admittance_debug_topic = str(self.get_parameter("admittance_debug_topic").value)
 
         self._pub_wrench = self.create_publisher(WrenchStamped, wrench_topic, 10)
         self.create_subscription(PoseStamped, ee_pose_topic, self._pose_cb, 20)
         self.create_subscription(Odometry, odom_topic, self._odom_cb, 20)
+        self.create_subscription(Float64MultiArray, admittance_debug_topic, self._debug_cb, 20)
 
         os.makedirs(os.path.dirname(self._log_file) or ".", exist_ok=True)
         self._csv_f = open(self._log_file, "w", newline="", encoding="utf-8")
@@ -71,6 +75,21 @@ class ArmForceInjectorNode(Node):
                 "force_x",
                 "force_y",
                 "force_z",
+                "adm_disp_x",
+                "adm_disp_y",
+                "adm_disp_z",
+                "adm_vel_x",
+                "adm_vel_y",
+                "adm_vel_z",
+                "ee_des_x",
+                "ee_des_y",
+                "ee_des_z",
+                "ee_vel_cmd_x",
+                "ee_vel_cmd_y",
+                "ee_vel_cmd_z",
+                "qdot_cmd_norm",
+                "tau_norm",
+                "tau_max_abs",
                 "base_x",
                 "base_y",
                 "base_yaw",
@@ -78,6 +97,7 @@ class ArmForceInjectorNode(Node):
         )
 
         self._current_force = np.zeros(3, dtype=np.float64)
+        self._debug = np.zeros(15, dtype=np.float64)
         self._base_state = np.zeros(3, dtype=np.float64)
         self._start_time: float | None = None
         self._pose_ready_time: float | None = None
@@ -192,11 +212,17 @@ class ArmForceInjectorNode(Node):
                 f"{self._current_force[0]:.4f}",
                 f"{self._current_force[1]:.4f}",
                 f"{self._current_force[2]:.4f}",
+                *[f"{value:.6f}" for value in self._debug],
                 f"{self._base_state[0]:.6f}",
                 f"{self._base_state[1]:.6f}",
                 f"{self._base_state[2]:.6f}",
             ]
         )
+
+    def _debug_cb(self, msg: Float64MultiArray) -> None:
+        values = np.asarray(msg.data[:15], dtype=np.float64)
+        self._debug[:] = 0.0
+        self._debug[: len(values)] = values
 
     def _odom_cb(self, msg: Odometry) -> None:
         self._base_state[0] = msg.pose.pose.position.x

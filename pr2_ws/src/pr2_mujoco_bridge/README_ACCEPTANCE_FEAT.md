@@ -221,7 +221,32 @@ Pass rule:
 
 - CSV logs are written to the exact `/tmp/*.csv` paths shown above unless you override `log_file:=...`.
 - `validate_force_response.py` now checks peak displacement, final residual, tail standard deviation, and tail drift.
-- `plot_arm_response.py` can still be used for arm-only plots.
+- `plot_arm_response.py` creates the five-panel raw response figure from a CSV log: external force input, admittance output, actual end-effector displacement, execution-command summary, and tail zoom. Example:
+
+```bash
+python3 pr2_ws/src/pr2_mujoco_bridge/scripts/plot_arm_response.py \
+  --csv /tmp/arm_1d.csv \
+  --baseline-skip-samples 60 \
+  --save /tmp/arm_1d_response.png
+```
+
+For presentation videos, keep the acceptance launch above unchanged and use the
+separate amplified demo launch:
+
+```bash
+ros2 launch pr2_mujoco_bridge pr2_whole_body_force_amplified.launch.py \
+  use_viewer:=false \
+  force_axis:=xyz \
+  force_magnitude:=30.0 \
+  log_file:=/tmp/wb_xyz_obvious.csv
+```
+
+The committed reference video, CSV, and polished figures are under
+`docs/whole_body_admittance_demo/`.  They were generated from recorded
+`/joint_states`, `/odom`, and external-wrench data, then replayed through
+`render_pr2_whole_body_video.py` with a fixed close camera so mobile-base motion
+is visible.  `plot_whole_body_response.py` creates the compact whole-body
+force/arm/base summary figure from the same CSV.
 
 ## Recommended Order
 

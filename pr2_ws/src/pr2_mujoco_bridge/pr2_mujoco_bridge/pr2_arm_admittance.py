@@ -12,6 +12,7 @@ from geometry_msgs.msg import PoseStamped, WrenchStamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray
 
 from pr2_mujoco_bridge.admittance_core import (
     AdmittanceState,
@@ -84,6 +85,7 @@ class ArmAdmittanceNode(Node):
         self.declare_parameter("wrench_topic", "wbc/arm/external_wrench")
         self.declare_parameter("joint_command_topic", "joint_commands")
         self.declare_parameter("ee_pose_topic", "wbc/arm/ee_pose_log")
+        self.declare_parameter("debug_topic", "wbc/arm/admittance_debug")
 
         self._command_frame = str(self.get_parameter("command_frame").value)
         if self._command_frame not in ("base_link", "world"):
@@ -158,6 +160,7 @@ class ArmAdmittanceNode(Node):
         wrench_topic = str(self.get_parameter("wrench_topic").value)
         cmd_topic = str(self.get_parameter("joint_command_topic").value)
         pose_topic = str(self.get_parameter("ee_pose_topic").value)
+        debug_topic = str(self.get_parameter("debug_topic").value)
 
         self._model = mujoco.MjModel.from_xml_path(model_path)
         self._data = mujoco.MjData(self._model)
@@ -236,6 +239,7 @@ class ArmAdmittanceNode(Node):
 
         self._pub_cmd = self.create_publisher(JointState, cmd_topic, 10)
         self._pub_pose = self.create_publisher(PoseStamped, pose_topic, 10)
+        self._pub_debug = self.create_publisher(Float64MultiArray, debug_topic, 10)
         self.create_subscription(WrenchStamped, wrench_topic, self._wrench_cb, 10)
         self.create_subscription(JointState, "joint_states", self._joint_state_cb, 20)
         self.create_timer(self._dt, self._control_loop)
@@ -317,6 +321,27 @@ class ArmAdmittanceNode(Node):
         pose.pose.position.y = float(ee_pos_cmd[1])
         pose.pose.position.z = float(ee_pos_cmd[2])
         self._pub_pose.publish(pose)
+
+    def _publish_debug(
+        self,
+        admittance_displacement: np.ndarray,
+        admittance_velocity: np.ndarray,
+        ee_des_cmd: np.ndarray,
+        ee_vel_cmd: np.ndarray,
+        qdot_cmd: np.ndarray,
+        tau: np.ndarray,
+    ) -> None:
+        msg = Float64MultiArray()
+        msg.data = [
+            *[float(value) for value in admittance_displacement[:3]],
+            *[float(value) for value in admittance_velocity[:3]],
+            *[float(value) for value in ee_des_cmd[:3]],
+            *[float(value) for value in ee_vel_cmd[:3]],
+            float(np.linalg.norm(qdot_cmd)),
+            float(np.linalg.norm(tau)),
+            float(np.max(np.abs(tau))) if len(tau) else 0.0,
+        ]
+        self._pub_debug.publish(msg)
 
     def _publish_torque_command(self, tau: np.ndarray, ee_pos_cmd: np.ndarray) -> None:
         cmd = JointState()
@@ -427,6 +452,14 @@ class ArmAdmittanceNode(Node):
         tau = tau_bias + m_arm @ (self._kd * delta_qdot + self._kp * delta_q)
         tau = np.clip(tau, -tau_lim, tau_lim)
 
+        self._publish_debug(
+            admittance_displacement=self._adm_state.displacement,
+            admittance_velocity=self._adm_state.velocity,
+            ee_des_cmd=ee_des_cmd,
+            ee_vel_cmd=ee_vel_cmd,
+            qdot_cmd=self._q_dot_cmd,
+            tau=tau,
+        )
         self._publish_torque_command(tau, ee_pos_cmd)
 
 
