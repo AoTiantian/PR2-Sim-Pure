@@ -35,6 +35,35 @@ class Pr2AdmittanceValidator(Node):
     def __init__(self) -> None:
         super().__init__("pr2_admittance_validator")
 
+        # #region agent log
+        import os
+        import time
+
+        self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._dbg_prev_active = False
+
+        def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            try:
+                import json as _json
+
+                payload = {
+                    "sessionId": "33df0d",
+                    "runId": os.environ.get("DEBUG_RUN_ID", "admittance_validation"),
+                    "hypothesisId": hypothesis_id,
+                    "location": "pr2_admittance_validator.py",
+                    "message": message,
+                    "data": data,
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open(self._dbg_log_path, "a", encoding="utf-8") as f:
+                    f.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+
+        self._dbg_write = _dbg_write
+        self._dbg_write("H0_DebugInit", "validator init", {"pid": int(os.getpid())})
+        # #endregion agent log
+
         self.declare_parameter("wrench_topic", "wbc/external_wrench")
         self.declare_parameter("accel_topic", "wbc/base_acceleration")
         self.declare_parameter("cmd_vel_topic", "cmd_vel")
@@ -63,6 +92,9 @@ class Pr2AdmittanceValidator(Node):
         self.declare_parameter("min_peak_cmd_v_planar", 0.06)
         self.declare_parameter("min_joint_state_count", 200)
         self.declare_parameter("pub_rate_hz", 30.0)
+        # If true, define t=0 at the first received joint_states.
+        # This aligns force_start_sec with "robot is ready" rather than node startup time.
+        self.declare_parameter("start_time_on_first_joint_state", True)
 
         self._wrench_topic = str(self.get_parameter("wrench_topic").value)
         self._accel_topic = str(self.get_parameter("accel_topic").value)
@@ -97,6 +129,7 @@ class Pr2AdmittanceValidator(Node):
         self._th_js = int(self.get_parameter("min_joint_state_count").value)
         rate_hz = float(self.get_parameter("pub_rate_hz").value)
         self._dt = 1.0 / max(rate_hz, 1.0)
+        self._start_on_js = bool(self.get_parameter("start_time_on_first_joint_state").value)
 
         self._pub_wrench = self.create_publisher(WrenchStamped, self._wrench_topic, 10)
         self.create_subscription(Accel, self._accel_topic, self._on_accel, 20)
@@ -104,7 +137,7 @@ class Pr2AdmittanceValidator(Node):
         self.create_subscription(JointState, self._js_topic, self._on_joint_states, 20)
 
         self._metrics = Metrics()
-        self._start_t = self.get_clock().now()
+        self._start_t = None if self._start_on_js else self.get_clock().now()
         self._done = False
         self.create_timer(self._dt, self._tick)
         mode = "schedule" if self._use_schedule else "single-step"
@@ -113,8 +146,26 @@ class Pr2AdmittanceValidator(Node):
             f"wrench={self._wrench_topic}, accel={self._accel_topic}, cmd={self._cmd_topic}, js={self._js_topic}, "
             f"mode={mode}, force_window=[{self._t_on:.2f}, {self._t_off:.2f}]s, total={self._t_total:.2f}s"
         )
+        # #region agent log
+        self._dbg_write(
+            "H1_ForceTimingConfig",
+            "timing config",
+            {
+                "start_on_first_joint_state": bool(self._start_on_js),
+                "t_on": float(self._t_on),
+                "t_off": float(self._t_off),
+                "t_total": float(self._t_total),
+                "use_schedule": bool(self._use_schedule),
+                "schedule_raw_len": int(len(self._schedule_raw)),
+                "frame_id": self._frame_id,
+                "wrench_topic": self._wrench_topic,
+            },
+        )
+        # #endregion agent log
 
     def _elapsed(self) -> float:
+        if self._start_t is None:
+            return 0.0
         return (self.get_clock().now() - self._start_t).nanoseconds * 1e-9
 
     def _parse_schedule(self, raw: str) -> List[Tuple[float, float, float, float, float]]:
@@ -181,6 +232,15 @@ class Pr2AdmittanceValidator(Node):
         self._metrics.max_planar_cmd_v = max(self._metrics.max_planar_cmd_v, vxy)
 
     def _on_joint_states(self, _msg: JointState) -> None:
+        if self._start_t is None:
+            self._start_t = self.get_clock().now()
+            # #region agent log
+            self._dbg_write(
+                "H2_StartTimeBase",
+                "start_t set on first joint_states",
+                {"ros_now_ns": int(self._start_t.nanoseconds)},
+            )
+            # #endregion agent log
         self._metrics.joint_state_count += 1
 
     def _publish_wrench(self, fx: float, fy: float, fz: float) -> None:
@@ -196,9 +256,25 @@ class Pr2AdmittanceValidator(Node):
         if self._done:
             return
 
+        # Wait for start time initialization if we are aligning to first joint_states.
+        if self._start_t is None:
+            self._publish_wrench(0.0, 0.0, 0.0)
+            return
+
         t = self._elapsed()
         fx, fy, fz = self._active_force(t)
         self._publish_wrench(fx, fy, fz)
+
+        # #region agent log
+        active = (abs(fx) + abs(fy) + abs(fz)) > 1e-9
+        if active != self._dbg_prev_active:
+            self._dbg_prev_active = active
+            self._dbg_write(
+                "H3_ForceEdge",
+                "force active edge",
+                {"t_elapsed": float(t), "fx": float(fx), "fy": float(fy), "fz": float(fz)},
+            )
+        # #endregion agent log
 
         if t < self._t_total:
             return

@@ -27,8 +27,8 @@ def generate_launch_description() -> LaunchDescription:
         default_value="",
     )
     # duration_sec is the virtual-force active duration.
-    duration_arg = DeclareLaunchArgument("duration_sec", default_value="3.0")
-    force_start_arg = DeclareLaunchArgument("force_start_sec", default_value="2.0")
+    duration_arg = DeclareLaunchArgument("duration_sec", default_value="5.0")
+    force_start_arg = DeclareLaunchArgument("force_start_sec", default_value="10.0")
     settle_arg = DeclareLaunchArgument("settle_after_sec", default_value="3.0")
 
     sim = Node(

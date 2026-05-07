@@ -439,6 +439,34 @@ class Pr2MujocoSim(Node):
                 target[sid] = steer
             for wid in wheel_ids:
                 target[wid] = v_wheel
+
+            # #region agent log
+            try:
+                # base_link world yaw from MuJoCo body quat (wxyz)
+                if self._body_base >= 0:
+                    quat = np.asarray(self._data.xquat[self._body_base, :], dtype=np.float64)
+                    qw, qx, qy, qz = (float(quat[j]) for j in range(4))
+                    siny_cosp = 2.0 * (qw * qz + qx * qy)
+                    cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz)
+                    yaw = float(math.atan2(siny_cosp, cosy_cosp))
+                else:
+                    yaw = float("nan")
+                now_m = time.monotonic()
+                if now_m - self._dbg_last_mono > 0.5:
+                    self._dbg_last_mono = now_m
+                    self._dbg_write(
+                        "H_SimCmdVelFrame",
+                        "apply_cmd_vel_to_ctrl planar",
+                        {
+                            "cmd_vel_base": [float(vx), float(vy), float(wz)],
+                            "vplanar": float(vplanar),
+                            "steer_atan2_vy_vx": float(steer),
+                            "base_yaw_world": float(yaw),
+                        },
+                    )
+            except Exception:
+                pass
+            # #endregion agent log
         elif abs(wz) > 1e-6:
             for sid in steer_ids:
                 target[sid] = 0.0
@@ -617,12 +645,27 @@ class Pr2MujocoSim(Node):
         # Apply initial joint positions before the first step so the arm starts
         # at the desired configuration, avoiding large convergence motions.
         if self._initial_qpos:
+            # #region agent log
+            self._dbg_write(
+                "H-initpose-1",
+                "Applying initial_qpos_json to MuJoCo qpos",
+                {"keys": sorted(list(self._initial_qpos.keys()))},
+            )
+            # #endregion agent log
             for jn, angle in self._initial_qpos.items():
                 jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jn)
                 if jid >= 0:
                     self._data.qpos[int(self._model.jnt_qposadr[jid])] = float(angle)
             mujoco.mj_forward(self._model, self._data)
             self.get_logger().info("initial_qpos_json 已应用到 MuJoCo 初始状态")
+        else:
+            # #region agent log
+            self._dbg_write(
+                "H-initpose-1",
+                "initial_qpos_json is empty; using MuJoCo defaults",
+                {},
+            )
+            # #endregion agent log
 
         self._base_lock_qpos = None
         self._base_lock_pending = bool(

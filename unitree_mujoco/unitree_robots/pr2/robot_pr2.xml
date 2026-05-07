@@ -37,7 +37,7 @@
     <!-- <body name="base_link" pos="-1.7 0.0 0.2" quat="0 0 0 1"> -->
     <body name="base_link" pos="-3.0 2.0 0.2" quat="0.7071 0 0 -0.7071">
     <!-- <body name="base_link" pos="-3.0 -2.0 0.2" quat="0.7071 0 0 0.7071"> -->
-      <freejoint/>
+      <freejoint name="base_free"/>
       <body name="pr2_base" pos="0 0 -0.051">
         <site name="pr2_base_sensor" pos="0 0 0" size="0.001"/>
       </body>
@@ -305,7 +305,7 @@
                   <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.7 0.7 0.7 1" mesh="elbow_flex"/>
                   <body name="l_forearm_roll_link">
                     <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
-                    <joint name="l_forearm_roll_joint" pos="0 0 0" axis="1 0 0" range="-300 300" actuatorfrcrange="-60 60" damping="0.1"/>
+                    <joint name="l_forearm_roll_joint" pos="0 0 0" axis="1 0 0" range="-300 300" actuatorfrcrange="-150 150" damping="2.0" armature="0.25" frictionloss="1.0"/>
                     <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="forearm_roll"/>
                     <body name="l_forearm_link">
                       <inertial pos="0.18791 -0.00017 -0.00912" quat="-0.000586594 0.726286 -0.00396869 0.687381" mass="2.57968" diaginertia="0.0166326 0.0150775 0.00360892"/>
@@ -316,7 +316,7 @@
                         <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.7 0.7 0.7 1" mesh="wrist_flex"/>
                         <body name="l_wrist_roll_link">
                           <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
-                          <joint name="l_wrist_roll_joint" pos="0 0 0" axis="1 0 0" range="-300 300" actuatorfrcrange="-30 30" damping="0.1"/>
+                          <joint name="l_wrist_roll_joint" pos="0 0 0" axis="1 0 0" range="-300 300" actuatorfrcrange="-80 80" damping="1.0" armature="0.12" frictionloss="0.6"/>
                           <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="wrist_roll"/>
                           <body name="l_wrist_ft_link" pos="0.03 0 0">
                             <inertial pos="0 0 0" mass="0.0001" diaginertia="1e-6 1e-6 1e-6"/>
@@ -422,9 +422,9 @@
     <velocity name="l_shoulder_lift_vel"  joint="l_shoulder_lift_joint"  kv="120" ctrllimited="true" ctrlrange="-8 8" forcerange="-800 800"/>
     <velocity name="l_upper_arm_roll_vel" joint="l_upper_arm_roll_joint" kv="8" ctrllimited="true" ctrlrange="-10 10" forcerange="-100 100"/>
     <velocity name="l_elbow_flex_vel"     joint="l_elbow_flex_joint"     kv="70" ctrllimited="true" ctrlrange="-8 8" forcerange="-600 600"/>
-    <velocity name="l_forearm_roll_vel"   joint="l_forearm_roll_joint"   kv="10" ctrllimited="true" ctrlrange="-12 12" forcerange="-60 60"/>
+    <velocity name="l_forearm_roll_vel"   joint="l_forearm_roll_joint"   kv="30" ctrllimited="true" ctrlrange="-12 12" forcerange="-150 150"/>
     <velocity name="l_wrist_flex_vel"     joint="l_wrist_flex_joint"     kv="8" ctrllimited="true" ctrlrange="-10 10" forcerange="-300 300"/>
-    <velocity name="l_wrist_roll_vel"     joint="l_wrist_roll_joint"     kv="6" ctrllimited="true" ctrlrange="-12 12" forcerange="-30 30"/>
+    <velocity name="l_wrist_roll_vel"     joint="l_wrist_roll_joint"     kv="20" ctrllimited="true" ctrlrange="-12 12" forcerange="-80 80"/>
   </actuator>
 
   <sensor>

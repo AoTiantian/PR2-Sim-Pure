@@ -13,6 +13,9 @@ import rclpy
 from geometry_msgs.msg import PoseStamped, WrenchStamped
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Empty
+import time
+import os
 
 
 @dataclass
@@ -67,6 +70,11 @@ class Pr2ArmAdmittanceValidator(Node):
         self.declare_parameter("max_rms_disp_after_settle", 0.02)
         self.declare_parameter("max_effort_rms_after_settle", 20.0)
         self.declare_parameter("pub_rate_hz", 30.0)
+        # If true, define t=0 at the first received joint_states.
+        # This aligns force_start_sec with "robot is ready" rather than node startup time.
+        self.declare_parameter("start_time_on_first_joint_state", True)
+        # Publish a one-shot start signal when timing starts.
+        self.declare_parameter("validation_start_topic", "validation/start")
 
         self._wrench_topic = str(self.get_parameter("wrench_topic").value)
         self._ee_pose_topic = str(self.get_parameter("ee_pose_topic").value)
@@ -102,6 +110,44 @@ class Pr2ArmAdmittanceValidator(Node):
             self._t_off = force_end_override if force_end_override >= 0.0 else (self._t_on + duration)
         self._t_total = total_override if total_override >= 0.0 else (self._t_off + settle_after)
 
+        # #region agent log
+        self._dbg_session_id = "33df0d"
+        self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+
+        def _dbg_write(hypothesisId: str, message: str, data: dict) -> None:
+            try:
+                payload = {
+                    "sessionId": self._dbg_session_id,
+                    "runId": "validator_frame",
+                    "hypothesisId": hypothesisId,
+                    "location": "pr2_arm_admittance_validator.py",
+                    "message": message,
+                    "data": data,
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open(self._dbg_log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(payload) + "\n")
+            except Exception:
+                pass
+
+        _dbg_write(
+            "H_ValidatorForceFrame",
+            "validator init force config",
+            {
+                "wrench_topic": self._wrench_topic,
+                "frame_id": self._frame_id,
+                "force_xyz": [float(self._fx), float(self._fy), float(self._fz)],
+                "force_start_sec": float(self._t_on),
+                "force_off_sec": float(self._t_off),
+                "total_sec": float(self._t_total),
+                "expected_pose_frame_id": self._expected_pose_frame,
+                "control_target_frame_id": self._control_target_frame,
+            },
+        )
+        self._dbg_write = _dbg_write
+        self._dbg_prev_on = None
+        # #endregion agent log
+
         self._th_disp_xy = float(self.get_parameter("min_peak_disp_xy").value)
         self._th_disp_xyz = float(self.get_parameter("min_peak_disp_xyz").value)
         self._th_disp_xy_max = float(self.get_parameter("max_peak_disp_xy").value)
@@ -116,8 +162,11 @@ class Pr2ArmAdmittanceValidator(Node):
         self._max_effort_rms = float(self.get_parameter("max_effort_rms_after_settle").value)
         hz = float(self.get_parameter("pub_rate_hz").value)
         self._dt = 1.0 / max(hz, 1.0)
+        self._start_on_js = bool(self.get_parameter("start_time_on_first_joint_state").value)
+        self._start_topic = str(self.get_parameter("validation_start_topic").value).strip()
 
         self._pub_wrench = self.create_publisher(WrenchStamped, self._wrench_topic, 10)
+        self._pub_start = self.create_publisher(Empty, self._start_topic, 10) if self._start_topic else None
         self.create_subscription(PoseStamped, self._ee_pose_topic, self._on_ee_pose, 20)
         self.create_subscription(JointState, self._js_topic, self._on_joint_states, 20)
         self.create_subscription(JointState, self._jc_topic, self._on_joint_command, 20)
@@ -131,7 +180,7 @@ class Pr2ArmAdmittanceValidator(Node):
         self._disp_count = 0
         self._eff_sq_sum = 0.0
         self._eff_count = 0
-        self._start_t = self.get_clock().now()
+        self._start_t = None if self._start_on_js else self.get_clock().now()
         self._done = False
         self._last_frame_warn_ns = 0
         self.create_timer(self._dt, self._tick)
@@ -181,6 +230,8 @@ class Pr2ArmAdmittanceValidator(Node):
         return out
 
     def _elapsed(self) -> float:
+        if self._start_t is None:
+            return 0.0
         return (self.get_clock().now() - self._start_t).nanoseconds * 1e-9
 
     def _active_force(self, t: float) -> Tuple[float, float, float]:
@@ -242,6 +293,10 @@ class Pr2ArmAdmittanceValidator(Node):
             self._disp_count += 1
 
     def _on_joint_states(self, _msg: JointState) -> None:
+        if self._start_t is None:
+            self._start_t = self.get_clock().now()
+            if self._pub_start is not None:
+                self._pub_start.publish(Empty())
         self._metrics.joint_state_count += 1
 
     def _on_joint_command(self, msg: JointState) -> None:
@@ -268,8 +323,31 @@ class Pr2ArmAdmittanceValidator(Node):
         msg.wrench.force.z = fz
         self._pub_wrench.publish(msg)
 
+        # #region agent log
+        try:
+            on = (abs(float(fx)) + abs(float(fy)) + abs(float(fz))) > 1e-9
+            prev = self._dbg_prev_on
+            if prev is None or bool(prev) != bool(on):
+                self._dbg_prev_on = bool(on)
+                self._dbg_write(
+                    "H_ValidatorForceFrame",
+                    "wrench publish edge",
+                    {
+                        "on": bool(on),
+                        "frame_id": str(self._frame_id),
+                        "force_xyz": [float(fx), float(fy), float(fz)],
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion agent log
+
     def _tick(self) -> None:
         if self._done:
+            return
+        # Wait for start time initialization if we are aligning to first joint_states.
+        if self._start_t is None:
+            self._publish_wrench(0.0, 0.0, 0.0)
             return
         t = self._elapsed()
         fx, fy, fz = self._active_force(t)
