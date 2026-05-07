@@ -67,6 +67,7 @@ class Pr2MujocoSim(Node):
         # #region agent log
         self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
         self._dbg_last_mono = 0.0
+        self._dbg_last_cmdvel_mono = 0.0
 
         def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
             try:
@@ -92,6 +93,15 @@ class Pr2MujocoSim(Node):
         # #endregion agent log
 
         self._dbg_prev_act_sign: Dict[str, int] = {}
+        self._last_steer_cmd: float | None = None
+        self._last_steer_cmd_mono: float | None = None
+
+        # Cache base steering/wheel joint indices for tracking debug.
+        # (Derived from actuator_trnid so it stays consistent with the model.)
+        self._dbg_base_steer_qadr: List[int] = []
+        self._dbg_base_steer_name: List[str] = []
+        self._dbg_base_wheel_vadr: List[int] = []
+        self._dbg_base_wheel_name: List[str] = []
 
         self.declare_parameter(
             "model_path",
@@ -120,6 +130,22 @@ class Pr2MujocoSim(Node):
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("joint_motion_log_rate_hz", 0.0)
         self.declare_parameter("joint_motion_log_regex", "")
+        # When cmd_vel steering changes fast, caster steering may lag.
+        # Gate wheel speed until steering is (approximately) aligned.
+        self.declare_parameter("cmd_vel_steer_gate_err_start_rad", 0.25)
+        self.declare_parameter("cmd_vel_steer_gate_err_full_rad", 0.80)
+        self.declare_parameter("cmd_vel_steer_gate_k_min", 0.20)
+        self.declare_parameter("cmd_vel_steer_rate_limit_rad_s", 2.0)
+        # If steering is badly misaligned, stop wheel drive until casters align.
+        self.declare_parameter("cmd_vel_steer_gate_hard_stop", True)
+        # Boost steer rate when target jumps far (prevents "stuck in old direction").
+        self.declare_parameter("cmd_vel_steer_rate_boost_rad_s", 8.0)
+        self.declare_parameter("cmd_vel_steer_rate_boost_err_rad", 1.0)
+        # When cmd_vel magnitude is small, atan2(vy,vx) becomes very sensitive to noise.
+        # Hold the steering direction under small planar speed to avoid caster hunting.
+        self.declare_parameter("cmd_vel_dir_hold_vplanar_min", 0.05)
+        self.declare_parameter("cmd_vel_dir_lpf_alpha", 0.25)
+        self.declare_parameter("cmd_vel_steer_target_lpf_alpha", 0.35)
 
         model_path = (
             self.get_parameter("model_path").get_parameter_value().string_value
@@ -183,6 +209,63 @@ class Pr2MujocoSim(Node):
                 .double_value
             ),
         )
+        self._steer_gate_err_start = float(
+            self.get_parameter("cmd_vel_steer_gate_err_start_rad")
+            .get_parameter_value()
+            .double_value
+        )
+        self._steer_gate_err_full = float(
+            self.get_parameter("cmd_vel_steer_gate_err_full_rad")
+            .get_parameter_value()
+            .double_value
+        )
+        self._steer_gate_k_min = float(
+            self.get_parameter("cmd_vel_steer_gate_k_min")
+            .get_parameter_value()
+            .double_value
+        )
+        self._steer_rate_limit = float(
+            self.get_parameter("cmd_vel_steer_rate_limit_rad_s")
+            .get_parameter_value()
+            .double_value
+        )
+        self._steer_gate_hard_stop = bool(
+            self.get_parameter("cmd_vel_steer_gate_hard_stop")
+            .get_parameter_value()
+            .bool_value
+        )
+        self._steer_rate_boost = float(
+            self.get_parameter("cmd_vel_steer_rate_boost_rad_s")
+            .get_parameter_value()
+            .double_value
+        )
+        self._steer_rate_boost = float(max(0.0, self._steer_rate_boost))
+        self._steer_rate_boost_err = float(
+            self.get_parameter("cmd_vel_steer_rate_boost_err_rad")
+            .get_parameter_value()
+            .double_value
+        )
+        self._steer_rate_boost_err = float(max(0.0, self._steer_rate_boost_err))
+        self._cmd_vel_dir_hold_vmin = float(
+            self.get_parameter("cmd_vel_dir_hold_vplanar_min")
+            .get_parameter_value()
+            .double_value
+        )
+        self._cmd_vel_dir_lpf_alpha = float(
+            self.get_parameter("cmd_vel_dir_lpf_alpha").get_parameter_value().double_value
+        )
+        self._cmd_vel_dir_lpf_alpha = float(max(0.0, min(1.0, self._cmd_vel_dir_lpf_alpha)))
+        self._cmd_vel_steer_target_lpf_alpha = float(
+            self.get_parameter("cmd_vel_steer_target_lpf_alpha")
+            .get_parameter_value()
+            .double_value
+        )
+        self._cmd_vel_steer_target_lpf_alpha = float(
+            max(0.0, min(1.0, self._cmd_vel_steer_target_lpf_alpha))
+        )
+        self._cmd_vel_vx_f = 0.0
+        self._cmd_vel_vy_f = 0.0
+        self._last_steer_target = None
         _jlog_re = (
             str(self.get_parameter("joint_motion_log_regex").value).strip()
         )
@@ -288,10 +371,19 @@ class Pr2MujocoSim(Node):
             "l_wrist_roll_joint",
         ]
         self._dbg_joint_vadr: Dict[str, int] = {}
+        self._dbg_joint_qadr: Dict[str, int] = {}
+        self._dbg_joint_range: Dict[str, Tuple[float, float]] = {}
         for jn in self._dbg_arm_joints:
             jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jn)
             if jid >= 0:
                 self._dbg_joint_vadr[jn] = int(self._model.jnt_dofadr[jid])
+                self._dbg_joint_qadr[jn] = int(self._model.jnt_qposadr[jid])
+                try:
+                    r0 = float(self._model.jnt_range[jid][0])
+                    r1 = float(self._model.jnt_range[jid][1])
+                    self._dbg_joint_range[jn] = (r0, r1)
+                except Exception:
+                    pass
 
         # 内置演示用执行器（与 scripts/pr2_sim.py 一致，按名称解析）
         self._demo_gripper_l = self._actuator_id_by_name("l_gripper_pos")
@@ -360,6 +452,39 @@ class Pr2MujocoSim(Node):
                 self._base_free_vadr = int(self._model.jnt_dofadr[j])
                 break
 
+        # #region agent log
+        # Build steering/wheel joint index caches for root-cause analysis of cmd_vel tracking.
+        try:
+            for aid in self._demo_steer_ids:
+                if aid < 0:
+                    continue
+                jid = int(self._model.actuator_trnid[aid, 0])
+                jn = mujoco.mj_id2name(self._model, mujoco.mjtObj.mjOBJ_JOINT, jid) or f"jid_{jid}"
+                qadr = int(self._model.jnt_qposadr[jid])
+                self._dbg_base_steer_qadr.append(qadr)
+                self._dbg_base_steer_name.append(str(jn))
+            for aid in self._demo_wheel_ids[:8]:
+                if aid < 0:
+                    continue
+                jid = int(self._model.actuator_trnid[aid, 0])
+                jn = mujoco.mj_id2name(self._model, mujoco.mjtObj.mjOBJ_JOINT, jid) or f"jid_{jid}"
+                vadr = int(self._model.jnt_dofadr[jid])
+                self._dbg_base_wheel_vadr.append(vadr)
+                self._dbg_base_wheel_name.append(str(jn))
+            self._dbg_write(
+                "H_CmdVelSteerWheelInit",
+                "cached steer/wheel joint indices",
+                {
+                    "n_steer": int(len(self._dbg_base_steer_qadr)),
+                    "steer_joints": list(self._dbg_base_steer_name),
+                    "n_wheels": int(len(self._dbg_base_wheel_vadr)),
+                    "wheel_joints": list(self._dbg_base_wheel_name),
+                },
+            )
+        except Exception as _exc:
+            self._dbg_write("H_CmdVelSteerWheelInit", "cache failed", {"err": str(_exc)})
+        # #endregion agent log
+
         # Find torso_lift_joint for optional locking
         torso_jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, "torso_lift_joint")
         if torso_jid >= 0:
@@ -419,22 +544,155 @@ class Pr2MujocoSim(Node):
     def _apply_cmd_vel_to_ctrl(self, target: np.ndarray) -> None:
         if not self._use_cmd_vel:
             return
+
+        def _wrap_to_pi(a: float) -> float:
+            # Map angle to (-pi, pi]
+            a = (a + math.pi) % (2.0 * math.pi) - math.pi
+            return a
+
+        def _angle_diff(a: float, b: float) -> float:
+            # Shortest signed angle difference a - b in (-pi, pi]
+            return _wrap_to_pi(a - b)
+
         vx = float(self._twist.linear.x)
         vy = float(self._twist.linear.y)
         wz = float(self._twist.angular.z)
-        # 全零时不改底盘执行器，避免关掉 demo 的轮速/转向
+        # If cmd_vel is (near) zero, actively stop wheels.
+        # Previously we returned early and kept the last wheel command, which can look like
+        # "base moving randomly" when higher-level control goes back to zero cmd_vel.
         if abs(vx) < 1e-6 and abs(vy) < 1e-6 and abs(wz) < 1e-6:
+            steer_ids = self._demo_steer_ids
+            wheel_ids = self._demo_wheel_ids
+            if len(wheel_ids) >= 8:
+                for aid in wheel_ids[:8]:
+                    if aid >= 0:
+                        target[aid] = 0.0
+                # #region agent log
+                try:
+                    now_m = time.monotonic()
+                    if not hasattr(self, "_dbg_last_cmdvel_zero_mono"):
+                        self._dbg_last_cmdvel_zero_mono = 0.0
+                    if float(now_m - float(self._dbg_last_cmdvel_zero_mono)) > 0.5:
+                        self._dbg_last_cmdvel_zero_mono = float(now_m)
+                        self._dbg_write(
+                            "H_CmdVelZeroStopsWheels",
+                            "zero cmd_vel -> wheel vel set to 0",
+                            {
+                                "cmd_vel_base": [float(vx), float(vy), float(wz)],
+                                "n_wheels": int(len(wheel_ids)),
+                                "n_steer": int(len(steer_ids)),
+                            },
+                        )
+                except Exception:
+                    pass
+                # #endregion agent log
             return
 
-        vplanar = math.hypot(vx, vy)
+        # Low-pass cmd_vel planar components to reduce direction jitter.
+        a = float(self._cmd_vel_dir_lpf_alpha)
+        self._cmd_vel_vx_f = (1.0 - a) * float(self._cmd_vel_vx_f) + a * vx
+        self._cmd_vel_vy_f = (1.0 - a) * float(self._cmd_vel_vy_f) + a * vy
+        vx_f = float(self._cmd_vel_vx_f)
+        vy_f = float(self._cmd_vel_vy_f)
+
+        vplanar = math.hypot(vx_f, vy_f)
         steer_ids = self._demo_steer_ids
         wheel_ids = self._demo_wheel_ids
         if len(steer_ids) < 4 or len(wheel_ids) < 8:
             return
 
         if vplanar > 1e-6:
-            steer = math.atan2(vy, vx)
-            v_wheel = vplanar * self._lin_gain
+            # Use wrapped steering angle to avoid discontinuities near +/-pi.
+            steer_target_raw = _wrap_to_pi(float(math.atan2(vy_f, vx_f)))
+            # Angle-domain low-pass on steer_target to avoid sudden direction flips.
+            # Uses shortest-angle interpolation on (-pi, pi].
+            steer_target_smooth = steer_target_raw
+            if self._last_steer_target is not None:
+                a_ang = float(self._cmd_vel_steer_target_lpf_alpha)
+                d = float(_angle_diff(steer_target_raw, float(self._last_steer_target)))
+                steer_target_smooth = _wrap_to_pi(
+                    float((1.0 - a_ang) * float(self._last_steer_target) + a_ang * (float(self._last_steer_target) + d))
+                )
+            # Under very small planar speed, hold the last steering direction to avoid caster hunting.
+            steer_target = steer_target_smooth
+            if (
+                float(vplanar) < float(self._cmd_vel_dir_hold_vmin)
+                and self._last_steer_target is not None
+            ):
+                steer_target = float(self._last_steer_target)
+                # #region agent log
+                try:
+                    now_m = time.monotonic()
+                    if not hasattr(self, "_dbg_last_dirhold_mono"):
+                        self._dbg_last_dirhold_mono = 0.0
+                    if float(now_m - float(self._dbg_last_dirhold_mono)) > 0.5:
+                        self._dbg_last_dirhold_mono = float(now_m)
+                        self._dbg_write(
+                            "H_CmdVelDirHold",
+                            "hold steer_target under small vplanar",
+                            {
+                                "cmd_vel_in": [float(vx), float(vy), float(wz)],
+                                "cmd_vel_filt": [float(vx_f), float(vy_f)],
+                                "vplanar": float(vplanar),
+                                "vmin": float(self._cmd_vel_dir_hold_vmin),
+                                "steer_target_raw": float(steer_target_raw),
+                                "steer_target_smooth": float(steer_target_smooth),
+                                "steer_target_held": float(steer_target),
+                            },
+                        )
+                except Exception:
+                    pass
+                # #endregion agent log
+            # Store the smooth target as the "memory" to maintain continuity.
+            self._last_steer_target = float(steer_target_smooth)
+            # Rate-limit steer command to avoid impossible instant flips (caster steering lag root-cause).
+            now_m = time.monotonic()
+            steer = steer_target
+            if self._last_steer_cmd is not None and self._last_steer_cmd_mono is not None:
+                dt = float(max(1e-6, now_m - self._last_steer_cmd_mono))
+                rate = float(max(0.0, self._steer_rate_limit))
+                # If the desired steering direction jumps far, temporarily boost steer rate so
+                # casters can catch up (otherwise wheels keep driving in the old direction).
+                try:
+                    jump = float(abs(_angle_diff(steer_target, self._last_steer_cmd)))
+                    if jump > float(self._steer_rate_boost_err):
+                        rate = float(max(rate, self._steer_rate_boost))
+                except Exception:
+                    pass
+                max_step = rate * dt
+                diff = float(_angle_diff(steer_target, self._last_steer_cmd))
+                if abs(diff) > max_step:
+                    steer = _wrap_to_pi(float(self._last_steer_cmd + math.copysign(max_step, diff)))
+            self._last_steer_cmd = float(steer)
+            self._last_steer_cmd_mono = float(now_m)
+
+            v_wheel_raw = float(vplanar * self._lin_gain)
+
+            # Steer gating: if steering is far from the desired angle, reduce wheel speed
+            # to prevent generating lateral scrub that kills planar velocity tracking.
+            steer_errs = []
+            try:
+                for qadr in self._dbg_base_steer_qadr:
+                    steer_act = float(self._data.qpos[qadr])
+                    steer_errs.append(float(_angle_diff(steer_act, steer)))
+            except Exception:
+                pass
+            steer_err_max_abs = float(max((abs(e) for e in steer_errs), default=0.0))
+            k = 1.0
+            start = float(max(1e-6, self._steer_gate_err_start))
+            full = float(max(start + 1e-6, self._steer_gate_err_full))
+            if steer_err_max_abs >= full:
+                k = 0.0
+            elif steer_err_max_abs <= start:
+                k = 1.0
+            else:
+                k = float(1.0 - (steer_err_max_abs - start) / (full - start))
+            # Under big steer error, optionally hard-stop wheel drive until casters align.
+            if (not bool(self._steer_gate_hard_stop)) or (steer_err_max_abs < full):
+                kmin = float(min(1.0, max(0.0, self._steer_gate_k_min)))
+                if k < kmin:
+                    k = kmin
+            v_wheel = float(v_wheel_raw * k)
             for sid in steer_ids:
                 target[sid] = steer
             for wid in wheel_ids:
@@ -451,17 +709,40 @@ class Pr2MujocoSim(Node):
                     yaw = float(math.atan2(siny_cosp, cosy_cosp))
                 else:
                     yaw = float("nan")
-                now_m = time.monotonic()
-                if now_m - self._dbg_last_mono > 0.5:
-                    self._dbg_last_mono = now_m
+                period = 0.1 if float(vplanar) > 0.05 else 0.5
+                if now_m - self._dbg_last_cmdvel_mono > period:
+                    self._dbg_last_cmdvel_mono = now_m
+                    wheel_errs = []
+                    for vadr in self._dbg_base_wheel_vadr:
+                        try:
+                            wheel_errs.append(float(self._data.qvel[vadr]) - float(v_wheel))
+                        except Exception:
+                            pass
                     self._dbg_write(
                         "H_SimCmdVelFrame",
                         "apply_cmd_vel_to_ctrl planar",
                         {
                             "cmd_vel_base": [float(vx), float(vy), float(wz)],
+                            "cmd_vel_filt_xy": [float(vx_f), float(vy_f)],
                             "vplanar": float(vplanar),
                             "steer_atan2_vy_vx": float(steer),
                             "base_yaw_world": float(yaw),
+                            "lin_gain": float(self._lin_gain),
+                            "ang_gain": float(self._ang_gain),
+                            "v_wheel_cmd_raw": float(v_wheel_raw),
+                            "v_wheel_cmd": float(v_wheel),
+                            "steer_gate_err_start_rad": float(self._steer_gate_err_start),
+                            "steer_gate_err_full_rad": float(self._steer_gate_err_full),
+                            "steer_gate_k_min": float(self._steer_gate_k_min),
+                            "steer_gate_k": float(k),
+                            "steer_rate_limit_rad_s": float(self._steer_rate_limit),
+                            "steer_target": float(steer_target),
+                            "steer_target_raw": float(steer_target_raw),
+                            "steer_target_smooth": float(steer_target_smooth),
+                            "steer_err_max_abs": float(steer_err_max_abs),
+                            "wheel_vel_err_rms": float(
+                                math.sqrt(sum((e * e for e in wheel_errs)) / max(1, len(wheel_errs)))
+                            ),
                         },
                     )
             except Exception:
@@ -620,10 +901,53 @@ class Pr2MujocoSim(Node):
         if self._prev_odom_time is not None:
             dt = now - self._prev_odom_time
             if dt > 1e-6:
-                lin = (pos - self._prev_base_pos) / dt
+                dpos = (pos - self._prev_base_pos).astype(np.float64, copy=False)
+                lin = dpos / dt
                 odom.twist.twist.linear.x = float(lin[0])
                 odom.twist.twist.linear.y = float(lin[1])
                 odom.twist.twist.linear.z = float(lin[2])
+                # #region agent log
+                try:
+                    # Compare measured planar velocity vs latest cmd_vel (both in base_link frame).
+                    # Note: /odom twist here is computed in odom/world axes from position difference.
+                    # We rotate it into base_link using current base yaw for apples-to-apples comparison
+                    # with cmd_vel which the sim consumes as base-frame planar velocity.
+                    siny_cosp = 2.0 * (qw * qz + qx * qy)
+                    cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz)
+                    yaw = float(math.atan2(siny_cosp, cosy_cosp))
+                    cy, sy = float(math.cos(yaw)), float(math.sin(yaw))
+                    vx_w, vy_w = float(lin[0]), float(lin[1])
+                    # world -> base
+                    vx_b = cy * vx_w + sy * vy_w
+                    vy_b = -sy * vx_w + cy * vy_w
+                    # last cmd_vel (already base)
+                    vx_cmd = float(self._twist.linear.x) if hasattr(self, "_twist") else 0.0
+                    vy_cmd = float(self._twist.linear.y) if hasattr(self, "_twist") else 0.0
+                    wz_cmd = float(self._twist.angular.z) if hasattr(self, "_twist") else 0.0
+                    if abs(vx_cmd) + abs(vy_cmd) + abs(wz_cmd) > 1e-6:
+                        cmd_planar = float(math.hypot(vx_cmd, vy_cmd))
+                        period = 0.1 if cmd_planar > 0.05 else 0.5
+                        if time.monotonic() - self._dbg_last_mono > period:
+                            self._dbg_last_mono = time.monotonic()
+                            self._dbg_write(
+                                "H_SimMeasuredVsCmd",
+                                "odom twist vs cmd_vel (base frame)",
+                                {
+                                    "base_yaw_world": float(yaw),
+                                    "cmd_vel_base": [vx_cmd, vy_cmd, wz_cmd],
+                                    "odom_vel_world": [float(lin[0]), float(lin[1])],
+                                    "odom_vel_base": [float(vx_b), float(vy_b)],
+                                    "track_err_base": [float(vx_b - vx_cmd), float(vy_b - vy_cmd)],
+                                    "cmd_planar": cmd_planar,
+                                    "odom_planar": float(math.hypot(vx_b, vy_b)),
+                                    "dt_sec": float(dt),
+                                    "pos_delta_world": [float(dpos[0]), float(dpos[1]), float(dpos[2])],
+                                    "pos_world": [float(pos[0]), float(pos[1]), float(pos[2])],
+                                },
+                            )
+                except Exception:
+                    pass
+                # #endregion agent log
         self._prev_base_pos = pos
         self._prev_odom_time = now
 
@@ -752,7 +1076,8 @@ class Pr2MujocoSim(Node):
 
             # #region agent log
             now_m = time.monotonic()
-            if now_m - self._dbg_last_mono > 1.0:
+            # Increase debug sampling rate so we can see when/why joints don't track vcmd.
+            if now_m - self._dbg_last_mono > 0.1:
                 self._dbg_last_mono = now_m
                 # For each arm joint: read commanded velocity target (from ctrl) for velocity actuators,
                 # actual qvel, and generalized forces (bias/actuator).
@@ -761,10 +1086,24 @@ class Pr2MujocoSim(Node):
                     vadr = self._dbg_joint_vadr.get(jn, None)
                     if vadr is None:
                         continue
+                    qadr = self._dbg_joint_qadr.get(jn, None)
+                    qpos = float(self._data.qpos[qadr]) if qadr is not None else None
+                    qrange = self._dbg_joint_range.get(jn, None)
+                    qpos_to_min = (qpos - float(qrange[0])) if (qpos is not None and qrange is not None) else None
+                    qpos_to_max = (float(qrange[1]) - qpos) if (qpos is not None and qrange is not None) else None
                     # commanded target: first velocity actuator mapped to this joint (if any)
                     vcmd = None
                     fr = None
+                    act_ids = []
+                    act_kinds = []
+                    ctrl_vals = []
                     for aid, kind in self._joint_to_act.get(jn, []):
+                        act_ids.append(int(aid))
+                        act_kinds.append(str(kind))
+                        try:
+                            ctrl_vals.append(float(self._data.ctrl[aid]))
+                        except Exception:
+                            ctrl_vals.append(float("nan"))
                         if kind == "velocity":
                             vcmd = float(self._data.ctrl[aid])
                             try:
@@ -773,6 +1112,7 @@ class Pr2MujocoSim(Node):
                                 fr = None
                             break
                     act = float(self._data.qfrc_actuator[vadr])
+                    qcon = float(self._data.qfrc_constraint[vadr])
                     act_abs = float(abs(act))
                     sat = False
                     sat_margin = None
@@ -788,10 +1128,18 @@ class Pr2MujocoSim(Node):
                     jdbg[jn] = {
                         "vcmd": vcmd,
                         "vact": float(self._data.qvel[vadr]),
+                        "qpos": qpos,
+                        "qrange": [float(qrange[0]), float(qrange[1])] if qrange is not None else None,
+                        "qpos_to_min": qpos_to_min,
+                        "qpos_to_max": qpos_to_max,
                         "bias": float(self._data.qfrc_bias[vadr]),
                         "act": act,
+                        "constraint": qcon,
                         "forcerange": fr,
                         "v_err": (float(vcmd) - float(self._data.qvel[vadr])) if vcmd is not None else None,
+                        "actuator_ids": act_ids,
+                        "actuator_kinds": act_kinds,
+                        "ctrl_vals": ctrl_vals,
                         "sat": sat,
                         "sat_margin": sat_margin,
                         "act_sign_flip": flip,
@@ -799,7 +1147,13 @@ class Pr2MujocoSim(Node):
                 self._dbg_write(
                     "H3_ActuatorOrMappingLimits",
                     "sim step arm velocity/forces",
-                    {"sim_time": float(self._data.time), "joints": jdbg},
+                    {
+                        "sim_time": float(self._data.time),
+                        "nu": int(self._model.nu),
+                        "ctrl_target_head": [float(x) for x in self._ctrl_target[: min(12, self._ctrl_target.shape[0])]],
+                        "ctrl_data_head": [float(x) for x in self._data.ctrl[: min(12, self._data.ctrl.shape[0])]],
+                        "joints": jdbg,
+                    },
                 )
             # #endregion agent log
 

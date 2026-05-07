@@ -98,6 +98,7 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
         self._dbg_last_mono = 0.0
         self._dbg_prev_wrench_active: Optional[bool] = None
+        self._dbg_last_cmdvel_mono = 0.0
 
         def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
             try:
@@ -179,6 +180,9 @@ class Pr2QpWholeBodyAdmittance(Node):
         self.declare_parameter("arm_max_joint_velocity_rad_s", 10.0)
         self.declare_parameter("base_max_linear_vel", 1.0)
         self.declare_parameter("base_max_angular_vel", 1.5)
+        # Smooth published base cmd_vel to avoid caster hunting under small forces.
+        self.declare_parameter("cmd_vel_lpf_alpha", 0.25)
+        self.declare_parameter("cmd_vel_dir_hold_vplanar_min", 0.05)
 
         # debug
         self.declare_parameter("publish_debug", True)
@@ -232,6 +236,14 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._arm_vel_lim = float(self.get_parameter("arm_max_joint_velocity_rad_s").value)
         self._base_v_lim = float(self.get_parameter("base_max_linear_vel").value)
         self._base_w_lim = float(self.get_parameter("base_max_angular_vel").value)
+        self._cmd_vel_alpha = float(self.get_parameter("cmd_vel_lpf_alpha").value)
+        self._cmd_vel_alpha = _clamp(self._cmd_vel_alpha, 0.0, 1.0)
+        self._cmd_vel_dir_hold_vmin = float(self.get_parameter("cmd_vel_dir_hold_vplanar_min").value)
+        self._cmd_vel_dir_hold_vmin = max(0.0, self._cmd_vel_dir_hold_vmin)
+
+        # Filter state for published cmd_vel (base frame).
+        self._cmd_vel_vx_f = 0.0
+        self._cmd_vel_vy_f = 0.0
 
         # subscriptions
         self._latest_wrench: Optional[WrenchStamped] = None
@@ -663,7 +675,60 @@ class Pr2QpWholeBodyAdmittance(Node):
         tw.linear.x = float(vx_cmd)
         tw.linear.y = float(vy_cmd)
         tw.angular.z = float(u[9])
+
+        # Smooth cmd_vel direction/magnitude (base frame) to avoid caster hunting when
+        # QP direction oscillates under small forces.
+        vx_raw = float(tw.linear.x)
+        vy_raw = float(tw.linear.y)
+        vplan_raw = float(math.hypot(vx_raw, vy_raw))
+        dir_raw = float(math.atan2(vy_raw, vx_raw)) if vplan_raw > 1e-9 else None
+        vx_out, vy_out = vx_raw, vy_raw
+        if bool(wrench_is_active) and (vplan_raw > 1e-9):
+            # Component-domain LPF: avoids "direction memory" and prevents sudden sign flips in vx/vy.
+            a = float(self._cmd_vel_alpha)
+            vx_f = (1.0 - a) * float(self._cmd_vel_vx_f) + a * vx_raw
+            vy_f = (1.0 - a) * float(self._cmd_vel_vy_f) + a * vy_raw
+            # Under very small commanded planar speed, hold the filtered direction but shrink magnitude.
+            if vplan_raw < float(self._cmd_vel_dir_hold_vmin):
+                vx_f *= 0.5
+                vy_f *= 0.5
+            vx_out = float(vx_f)
+            vy_out = float(vy_f)
+            self._cmd_vel_vx_f = float(vx_f)
+            self._cmd_vel_vy_f = float(vy_f)
+
+        tw.linear.x = float(vx_out)
+        tw.linear.y = float(vy_out)
         self._pub_cmd_vel.publish(tw)
+
+        # #region agent log
+        # When base "hunts", first determine whether cmd_vel direction itself oscillates.
+        try:
+            now_m = time.monotonic()
+            if bool(wrench_is_active) and (now_m - float(self._dbg_last_cmdvel_mono) > 0.1):
+                self._dbg_last_cmdvel_mono = float(now_m)
+                vplan = float(math.hypot(vx_cmd, vy_cmd))
+                ang = float(math.atan2(vy_cmd, vx_cmd)) if vplan > 1e-9 else float("nan")
+                self._dbg_write(
+                    "H11_QPCmdVelDir",
+                    "qp cmd_vel published (base frame)",
+                    {
+                        "sim_time": float(self._data.time),
+                        "wrench_active": bool(wrench_is_active),
+                        "cmd_vel_base_raw": [float(vx_raw), float(vy_raw), float(u[9])],
+                        "cmd_vel_base_pub": [float(vx_out), float(vy_out), float(u[9])],
+                        "vplanar_raw": float(vplan_raw),
+                        "dir_atan2_raw": float(dir_raw) if dir_raw is not None else None,
+                        "vplanar_pub": float(math.hypot(vx_out, vy_out)),
+                        "dir_atan2_pub": float(math.atan2(vy_out, vx_out)) if math.hypot(vx_out, vy_out) > 1e-9 else None,
+                        "alpha": float(self._cmd_vel_alpha),
+                        "dir_hold_vmin": float(self._cmd_vel_dir_hold_vmin),
+                        "u_base_world": [float(u[7]), float(u[8]), float(u[9])],
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion agent log
 
         js = JointState()
         js.name = list(self._arm_joints)
