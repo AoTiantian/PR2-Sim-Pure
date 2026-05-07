@@ -702,6 +702,44 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._pub_cmd_vel.publish(tw)
 
         # #region agent log
+        # Detect "base stops while arm still moves" during constant wrench.
+        try:
+            now_m = time.monotonic()
+            if bool(wrench_is_active) and (now_m - float(self._dbg_last_mono) > 0.2):
+                self._dbg_last_mono = float(now_m)
+                base_plan = float(math.hypot(vx_out, vy_out))
+                arm_peak = float(np.max(np.abs(u[:7]))) if u is not None else float("nan")
+                try:
+                    v_ach_local = (J @ u).astype(np.float64)
+                    v_ach_list = [float(x) for x in v_ach_local.tolist()]
+                except Exception:
+                    v_ach_list = None
+                self._dbg_write(
+                    "H12_BaseStopWhileArmMoves",
+                    "base/arm activity under wrench",
+                    {
+                        "sim_time": float(self._data.time),
+                        "base_latched": bool(self._latch.latched),
+                        "wrench_frame_id": str(self._latest_wrench.header.frame_id) if self._latest_wrench is not None else None,
+                        "w_raw_msg": [
+                            float(self._latest_wrench.wrench.force.x),
+                            float(self._latest_wrench.wrench.force.y),
+                            float(self._latest_wrench.wrench.force.z),
+                        ] if self._latest_wrench is not None else None,
+                        "cmd_vel_pub_base": [float(vx_out), float(vy_out), float(u[9])],
+                        "cmd_planar": float(base_plan),
+                        "u_base_world": [float(u[7]), float(u[8]), float(u[9])],
+                        "arm_peak_abs_qdot": float(arm_peak),
+                        "v_des": [float(x) for x in v_des.tolist()],
+                        "v_ach": v_ach_list,
+                        "obj": float(res.info.obj_val) if hasattr(res, "info") else None,
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion agent log
+
+        # #region agent log
         # When base "hunts", first determine whether cmd_vel direction itself oscillates.
         try:
             now_m = time.monotonic()

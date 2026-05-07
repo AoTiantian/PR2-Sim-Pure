@@ -645,42 +645,67 @@ class Pr2MujocoSim(Node):
                 # #endregion agent log
             # Store the smooth target as the "memory" to maintain continuity.
             self._last_steer_target = float(steer_target_smooth)
+
+            # Pre-check: current steering error w.r.t. *desired target* (before rate limiting).
+            # If error is huge and we are going to hard-stop wheel drive anyway, do NOT rate-limit
+            # the steer command. Otherwise, the casters may take too long to align and appear
+            # "never points to correct direction".
+            steer_errs_to_target = []
+            try:
+                for qadr in self._dbg_base_steer_qadr:
+                    steer_act = float(self._data.qpos[qadr])
+                    steer_errs_to_target.append(float(_angle_diff(steer_act, steer_target)))
+            except Exception:
+                steer_errs_to_target = []
+            steer_err_to_target_max_abs = float(
+                max((abs(e) for e in steer_errs_to_target), default=0.0)
+            )
+
             # Rate-limit steer command to avoid impossible instant flips (caster steering lag root-cause).
             now_m = time.monotonic()
             steer = steer_target
+            steer_rate_used = float(max(0.0, self._steer_rate_limit))
+            steer_jump = float("nan")
+            steer_rate_limit_bypassed = False
+            start = float(max(1e-6, self._steer_gate_err_start))
+            full = float(max(start + 1e-6, self._steer_gate_err_full))
+            if bool(self._steer_gate_hard_stop) and (steer_err_to_target_max_abs >= full):
+                steer_rate_limit_bypassed = True
+                steer = steer_target
+            # If casters are already aligned to the desired target, do not keep a lagging
+            # steer command around (it would artificially create a large "error" and gate wheels).
+            if steer_err_to_target_max_abs <= start:
+                steer_rate_limit_bypassed = True
+                steer = steer_target
             if self._last_steer_cmd is not None and self._last_steer_cmd_mono is not None:
                 dt = float(max(1e-6, now_m - self._last_steer_cmd_mono))
                 rate = float(max(0.0, self._steer_rate_limit))
                 # If the desired steering direction jumps far, temporarily boost steer rate so
                 # casters can catch up (otherwise wheels keep driving in the old direction).
                 try:
-                    jump = float(abs(_angle_diff(steer_target, self._last_steer_cmd)))
-                    if jump > float(self._steer_rate_boost_err):
+                    steer_jump = float(abs(_angle_diff(steer_target, self._last_steer_cmd)))
+                    if steer_jump > float(self._steer_rate_boost_err):
                         rate = float(max(rate, self._steer_rate_boost))
                 except Exception:
                     pass
-                max_step = rate * dt
-                diff = float(_angle_diff(steer_target, self._last_steer_cmd))
-                if abs(diff) > max_step:
-                    steer = _wrap_to_pi(float(self._last_steer_cmd + math.copysign(max_step, diff)))
+                steer_rate_used = float(rate)
+                if not steer_rate_limit_bypassed:
+                    max_step = rate * dt
+                    diff = float(_angle_diff(steer_target, self._last_steer_cmd))
+                    if abs(diff) > max_step:
+                        steer = _wrap_to_pi(
+                            float(self._last_steer_cmd + math.copysign(max_step, diff))
+                        )
             self._last_steer_cmd = float(steer)
             self._last_steer_cmd_mono = float(now_m)
 
             v_wheel_raw = float(vplanar * self._lin_gain)
 
-            # Steer gating: if steering is far from the desired angle, reduce wheel speed
-            # to prevent generating lateral scrub that kills planar velocity tracking.
-            steer_errs = []
-            try:
-                for qadr in self._dbg_base_steer_qadr:
-                    steer_act = float(self._data.qpos[qadr])
-                    steer_errs.append(float(_angle_diff(steer_act, steer)))
-            except Exception:
-                pass
-            steer_err_max_abs = float(max((abs(e) for e in steer_errs), default=0.0))
+            # Steer gating should be based on actual caster alignment to the *desired target*,
+            # not to a lagged steer command (which can create artificial error and stall motion).
+            steer_errs = steer_errs_to_target
+            steer_err_max_abs = float(steer_err_to_target_max_abs)
             k = 1.0
-            start = float(max(1e-6, self._steer_gate_err_start))
-            full = float(max(start + 1e-6, self._steer_gate_err_full))
             if steer_err_max_abs >= full:
                 k = 0.0
             elif steer_err_max_abs <= start:
@@ -718,6 +743,12 @@ class Pr2MujocoSim(Node):
                             wheel_errs.append(float(self._data.qvel[vadr]) - float(v_wheel))
                         except Exception:
                             pass
+                    steer_acts = []
+                    try:
+                        for qadr in self._dbg_base_steer_qadr:
+                            steer_acts.append(float(self._data.qpos[qadr]))
+                    except Exception:
+                        steer_acts = []
                     self._dbg_write(
                         "H_SimCmdVelFrame",
                         "apply_cmd_vel_to_ctrl planar",
@@ -735,10 +766,20 @@ class Pr2MujocoSim(Node):
                             "steer_gate_err_full_rad": float(self._steer_gate_err_full),
                             "steer_gate_k_min": float(self._steer_gate_k_min),
                             "steer_gate_k": float(k),
+                            "steer_gate_hard_stop": bool(self._steer_gate_hard_stop),
                             "steer_rate_limit_rad_s": float(self._steer_rate_limit),
+                            "steer_rate_used_rad_s": float(steer_rate_used),
+                            "steer_rate_limit_bypassed": bool(steer_rate_limit_bypassed),
+                            "steer_jump_abs_rad": float(steer_jump),
+                            "steer_rate_boost_rad_s": float(self._steer_rate_boost),
+                            "steer_rate_boost_err_rad": float(self._steer_rate_boost_err),
                             "steer_target": float(steer_target),
                             "steer_target_raw": float(steer_target_raw),
                             "steer_target_smooth": float(steer_target_smooth),
+                            "steer_errs_to_target": steer_errs_to_target,
+                            "steer_err_to_target_max_abs": float(steer_err_to_target_max_abs),
+                            "steer_act_qpos": steer_acts,
+                            "steer_errs": steer_errs,
                             "steer_err_max_abs": float(steer_err_max_abs),
                             "wheel_vel_err_rms": float(
                                 math.sqrt(sum((e * e for e in wheel_errs)) / max(1, len(wheel_errs)))
