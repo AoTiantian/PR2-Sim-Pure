@@ -5,6 +5,7 @@ import numpy as np
 from pr2_mujoco_bridge.admittance_core import (
     AdmittanceState,
     AxisGains,
+    ForceTrackingReferenceState,
     advance_bounded_reference,
     clip_norm,
     limit_joint_velocity_near_limits,
@@ -224,3 +225,47 @@ def test_solve_dls_velocity_with_nullspace_is_noop_without_redundancy() -> None:
     plain = solve_dls_velocity(jacobian, ee_velocity, damping_lambda=0.1)
 
     np.testing.assert_allclose(qdot, plain, atol=1e-9)
+
+
+def test_force_tracking_reference_holds_offset_after_force_release() -> None:
+    state = ForceTrackingReferenceState.zeros(dim=3)
+    dt = 0.01
+
+    for step in range(500):
+        force = np.array([10.0, 0.0, 0.0], dtype=np.float64) if step < 180 else np.zeros(3)
+        state = state.step(
+            force=force,
+            dt=dt,
+            force_deadband=np.array([0.5, 0.5, 0.5], dtype=np.float64),
+            filter_alpha=0.35,
+            force_to_velocity_gain=np.array([0.006, 0.006, 0.006], dtype=np.float64),
+            max_velocity=np.array([0.08, 0.08, 0.08], dtype=np.float64),
+            max_displacement=np.array([0.18, 0.18, 0.18], dtype=np.float64),
+            idle_velocity_decay=0.82,
+        )
+        if step == 220:
+            released_reference = state.reference.copy()
+
+    assert state.reference[0] > 0.09
+    assert np.linalg.norm(state.velocity) < 1.0e-4
+    np.testing.assert_allclose(state.reference, released_reference, atol=1.5e-3)
+
+
+def test_force_tracking_reference_clips_velocity_and_reference() -> None:
+    state = ForceTrackingReferenceState.zeros(dim=2)
+
+    for _ in range(90):
+        state = state.step(
+            force=np.array([100.0, 100.0], dtype=np.float64),
+            dt=0.02,
+            force_deadband=np.array([0.0, 0.0], dtype=np.float64),
+            filter_alpha=1.0,
+            force_to_velocity_gain=np.array([1.0, 1.0], dtype=np.float64),
+            max_velocity=np.array([0.06, 0.08], dtype=np.float64),
+            max_displacement=np.array([0.10, 0.12], dtype=np.float64),
+            idle_velocity_decay=0.9,
+        )
+
+    assert state.velocity[0] <= 0.06
+    assert state.velocity[1] <= 0.08
+    np.testing.assert_allclose(state.reference, np.array([0.10, 0.12]), atol=1.0e-9)

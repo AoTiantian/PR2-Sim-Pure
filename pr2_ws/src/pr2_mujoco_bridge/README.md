@@ -151,3 +151,27 @@ ros2 launch pr2_mujoco_bridge pr2_ee_pose.launch.py
 ```bash
 ros2 topic echo /ee_pose
 ```
+
+## 力跟踪参考模式（feat 第一阶段）
+
+`pr2_arm_admittance` 与 `pr2_base_admittance` 默认仍使用
+`reference_mode:=fixed_equilibrium`：撤力后回到启动时捕获的平衡点。新增
+`reference_mode:=force_tracking` 用于强展示/验收切片：外力经 deadband/filter
+生成有界参考速度，积分成动态参考位置；撤力后参考速度衰减到 0，但参考位置保持。
+
+单臂：
+
+```bash
+ros2 launch pr2_mujoco_bridge pr2_arm_force_tracking.launch.py \
+  use_viewer:=false force_axis:=x log_file:=/tmp/arm_ft_x.csv
+```
+
+全身协调：
+
+```bash
+ros2 launch pr2_mujoco_bridge pr2_whole_body_force_tracking.launch.py \
+  use_viewer:=false force_axis:=xyz log_file:=/tmp/wb_ft_xyz.csv
+```
+
+日志会包含 `ee_des_*`、`base_ref_*`、`base_vel_cmd_*` 等动态参考与控制摘要列；
+验收阈值和 validator 命令见 `README_ACCEPTANCE_FEAT.md`。

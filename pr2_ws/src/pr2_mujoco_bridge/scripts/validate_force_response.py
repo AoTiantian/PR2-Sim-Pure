@@ -47,6 +47,46 @@ def _axis_metrics(
     }
 
 
+def _tracking_axes(raw: str) -> list[str]:
+    axes = [axis.strip() for axis in raw.split(",") if axis.strip()]
+    return axes or ["x", "y", "z"]
+
+
+def _tracking_metrics(
+    rows: list[dict[str, str]],
+    reference_prefix: str,
+    actual_prefix: str,
+    axes: list[str],
+    baseline_index: int,
+    tail_samples: int,
+) -> tuple[dict[str, dict[str, float]], list[str]]:
+    metrics: dict[str, dict[str, float]] = {}
+    missing: list[str] = []
+    for axis in axes:
+        ref_key = f"{reference_prefix}_{axis}"
+        actual_key = f"{actual_prefix}_{axis}"
+        if ref_key not in rows[0]:
+            missing.append(ref_key)
+            continue
+        if actual_key not in rows[0]:
+            missing.append(actual_key)
+            continue
+        reference = _series(rows, ref_key, baseline_index)
+        actual = _series(rows, actual_key, baseline_index)
+        error = [actual[i] - reference[i] for i in range(len(reference))]
+        ref_tail = reference[-min(tail_samples, len(reference)) :]
+        metrics[axis] = {
+            "reference_peak_mm": max(abs(value) for value in reference) * 1000.0,
+            "actual_peak_mm": max(abs(value) for value in actual) * 1000.0,
+            "tracking_error_mm": max(abs(value) for value in error) * 1000.0,
+            "reference_tail_std_mm": pstdev(ref_tail) * 1000.0 if len(ref_tail) > 1 else 0.0,
+            "reference_tail_drift_mm": abs(ref_tail[-1] - ref_tail[0]) * 1000.0
+            if len(ref_tail) > 1
+            else 0.0,
+        }
+    return metrics, missing
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="验证 PR2 力响应 CSV")
     parser.add_argument("--csv", required=True, help="CSV 文件路径")
@@ -76,6 +116,33 @@ def main() -> None:
     parser.add_argument("--max-base-yaw-tail-std-deg", type=float, default=None)
     parser.add_argument("--max-base-yaw-tail-drift-deg", type=float, default=None)
     parser.add_argument("--max-base-yaw-tail-sign-changes", type=float, default=None)
+    parser.add_argument(
+        "--force-tracking",
+        action="store_true",
+        help="Enable dynamic-reference force-tracking checks.",
+    )
+    parser.add_argument(
+        "--reference-prefix",
+        default="ee_des",
+        help="CSV prefix for dynamic reference columns, for example ee_des or base_ref.",
+    )
+    parser.add_argument(
+        "--actual-prefix",
+        default="pos",
+        help="CSV prefix for actual response columns, for example pos or base.",
+    )
+    parser.add_argument(
+        "--tracking-axes",
+        default="x,y,z",
+        help="Comma-separated tracking axes, for example x,y,z or x,y,yaw.",
+    )
+    parser.add_argument("--min-reference-peak-mm", type=float, default=None)
+    parser.add_argument("--max-reference-peak-mm", type=float, default=None)
+    parser.add_argument("--min-actual-peak-mm", type=float, default=None)
+    parser.add_argument("--max-actual-peak-mm", type=float, default=None)
+    parser.add_argument("--max-tracking-error-mm", type=float, default=None)
+    parser.add_argument("--max-reference-tail-std-mm", type=float, default=None)
+    parser.add_argument("--max-reference-tail-drift-mm", type=float, default=None)
     args = parser.parse_args()
 
     if not os.path.isfile(args.csv):
@@ -214,6 +281,80 @@ def main() -> None:
             failures.append(
                 f"Base yaw tail sign changes {base_yaw['sign_changes']:.0f} > {args.max_base_yaw_tail_sign_changes:.0f}"
             )
+
+    if args.force_tracking:
+        tracking, missing = _tracking_metrics(
+            rows=rows,
+            reference_prefix=args.reference_prefix,
+            actual_prefix=args.actual_prefix,
+            axes=_tracking_axes(args.tracking_axes),
+            baseline_index=args.baseline_skip_samples,
+            tail_samples=args.tail_samples,
+        )
+        if missing:
+            failures.append(f"Missing force-tracking columns: {', '.join(sorted(missing))}")
+        if tracking:
+            reference_peak_mm = max(metric["reference_peak_mm"] for metric in tracking.values())
+            actual_peak_mm = max(metric["actual_peak_mm"] for metric in tracking.values())
+            tracking_error_mm = max(metric["tracking_error_mm"] for metric in tracking.values())
+            reference_tail_std_mm = max(
+                metric["reference_tail_std_mm"] for metric in tracking.values()
+            )
+            reference_tail_drift_mm = max(
+                metric["reference_tail_drift_mm"] for metric in tracking.values()
+            )
+            print("Force-tracking metrics:")
+            for axis, metric in tracking.items():
+                print(
+                    f"  {axis}: ref_peak={metric['reference_peak_mm']:.3f} mm, "
+                    f"actual_peak={metric['actual_peak_mm']:.3f} mm, "
+                    f"track_error={metric['tracking_error_mm']:.3f} mm, "
+                    f"ref_tail_std={metric['reference_tail_std_mm']:.3f} mm, "
+                    f"ref_tail_drift={metric['reference_tail_drift_mm']:.3f} mm"
+                )
+            if (
+                args.min_reference_peak_mm is not None
+                and reference_peak_mm < args.min_reference_peak_mm
+            ):
+                failures.append(
+                    f"Reference peak {reference_peak_mm:.3f} mm < {args.min_reference_peak_mm:.3f} mm"
+                )
+            if (
+                args.max_reference_peak_mm is not None
+                and reference_peak_mm > args.max_reference_peak_mm
+            ):
+                failures.append(
+                    f"Reference peak {reference_peak_mm:.3f} mm > {args.max_reference_peak_mm:.3f} mm"
+                )
+            if args.min_actual_peak_mm is not None and actual_peak_mm < args.min_actual_peak_mm:
+                failures.append(
+                    f"Actual peak {actual_peak_mm:.3f} mm < {args.min_actual_peak_mm:.3f} mm"
+                )
+            if args.max_actual_peak_mm is not None and actual_peak_mm > args.max_actual_peak_mm:
+                failures.append(
+                    f"Actual peak {actual_peak_mm:.3f} mm > {args.max_actual_peak_mm:.3f} mm"
+                )
+            if (
+                args.max_tracking_error_mm is not None
+                and tracking_error_mm > args.max_tracking_error_mm
+            ):
+                failures.append(
+                    f"Tracking error {tracking_error_mm:.3f} mm > {args.max_tracking_error_mm:.3f} mm"
+                )
+            if (
+                args.max_reference_tail_std_mm is not None
+                and reference_tail_std_mm > args.max_reference_tail_std_mm
+            ):
+                failures.append(
+                    f"Reference tail std {reference_tail_std_mm:.3f} mm > {args.max_reference_tail_std_mm:.3f} mm"
+                )
+            if (
+                args.max_reference_tail_drift_mm is not None
+                and reference_tail_drift_mm > args.max_reference_tail_drift_mm
+            ):
+                failures.append(
+                    f"Reference tail drift {reference_tail_drift_mm:.3f} mm > {args.max_reference_tail_drift_mm:.3f} mm"
+                )
 
     if failures:
         print("RESULT: FAIL")

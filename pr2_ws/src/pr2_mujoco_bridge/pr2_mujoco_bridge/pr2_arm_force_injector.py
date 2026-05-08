@@ -41,6 +41,7 @@ class ArmForceInjectorNode(Node):
         self.declare_parameter("ee_pose_topic", "wbc/arm/ee_pose_log")
         self.declare_parameter("odom_topic", "odom")
         self.declare_parameter("admittance_debug_topic", "wbc/arm/admittance_debug")
+        self.declare_parameter("base_admittance_debug_topic", "wbc/base/admittance_debug")
 
         axis_raw = self.get_parameter("force_axis").value
         self._axis = "y" if axis_raw is True else str(axis_raw).lower()
@@ -57,11 +58,20 @@ class ArmForceInjectorNode(Node):
         ee_pose_topic = str(self.get_parameter("ee_pose_topic").value)
         odom_topic = str(self.get_parameter("odom_topic").value)
         admittance_debug_topic = str(self.get_parameter("admittance_debug_topic").value)
+        base_admittance_debug_topic = str(
+            self.get_parameter("base_admittance_debug_topic").value
+        )
 
         self._pub_wrench = self.create_publisher(WrenchStamped, wrench_topic, 10)
         self.create_subscription(PoseStamped, ee_pose_topic, self._pose_cb, 20)
         self.create_subscription(Odometry, odom_topic, self._odom_cb, 20)
         self.create_subscription(Float64MultiArray, admittance_debug_topic, self._debug_cb, 20)
+        self.create_subscription(
+            Float64MultiArray,
+            base_admittance_debug_topic,
+            self._base_debug_cb,
+            20,
+        )
 
         os.makedirs(os.path.dirname(self._log_file) or ".", exist_ok=True)
         self._csv_f = open(self._log_file, "w", newline="", encoding="utf-8")
@@ -93,11 +103,18 @@ class ArmForceInjectorNode(Node):
                 "base_x",
                 "base_y",
                 "base_yaw",
+                "base_ref_x",
+                "base_ref_y",
+                "base_ref_yaw",
+                "base_vel_cmd_x",
+                "base_vel_cmd_y",
+                "base_vel_cmd_yaw",
             ]
         )
 
         self._current_force = np.zeros(3, dtype=np.float64)
         self._debug = np.zeros(15, dtype=np.float64)
+        self._base_debug = np.zeros(6, dtype=np.float64)
         self._base_state = np.zeros(3, dtype=np.float64)
         self._start_time: float | None = None
         self._pose_ready_time: float | None = None
@@ -216,6 +233,7 @@ class ArmForceInjectorNode(Node):
                 f"{self._base_state[0]:.6f}",
                 f"{self._base_state[1]:.6f}",
                 f"{self._base_state[2]:.6f}",
+                *[f"{value:.6f}" for value in self._base_debug],
             ]
         )
 
@@ -223,6 +241,11 @@ class ArmForceInjectorNode(Node):
         values = np.asarray(msg.data[:15], dtype=np.float64)
         self._debug[:] = 0.0
         self._debug[: len(values)] = values
+
+    def _base_debug_cb(self, msg: Float64MultiArray) -> None:
+        values = np.asarray(msg.data[:6], dtype=np.float64)
+        self._base_debug[:] = 0.0
+        self._base_debug[: len(values)] = values
 
     def _odom_cb(self, msg: Odometry) -> None:
         self._base_state[0] = msg.pose.pose.position.x

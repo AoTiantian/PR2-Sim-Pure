@@ -217,11 +217,93 @@ Expected:
 Pass rule:
 - Both validator runs print `RESULT: PASS`.
 
+## Force-Tracking Reference Mode
+
+These cases validate the first-stage `force_tracking_reference` slice.  Unlike
+the fixed-equilibrium acceptance above, the reference should move under force,
+then hold the new reference after force release instead of returning to the
+startup pose.
+
+### Arm X/Y/Z/XYZ
+
+Run the same launch for each `force_axis` in `x`, `y`, `z`, and `xyz`:
+
+```bash
+bash $CLEANUP
+
+ros2 launch pr2_mujoco_bridge pr2_arm_force_tracking.launch.py \
+  use_viewer:=false \
+  force_axis:=x \
+  log_file:=/tmp/arm_ft_x.csv
+
+python3 $VALIDATOR \
+  --csv /tmp/arm_ft_x.csv \
+  --force-tracking \
+  --reference-prefix ee_des \
+  --actual-prefix pos \
+  --tracking-axes x,y,z \
+  --baseline-skip-samples 60 \
+  --tail-samples 120 \
+  --min-reference-peak-mm 90 \
+  --min-actual-peak-mm 60 \
+  --max-tracking-error-mm 80 \
+  --max-reference-tail-drift-mm 2
+```
+
+Expected:
+- Arm reference peak is in the visible 100-200 mm class for the driven axis.
+- After release, `ee_des_*` remains stable instead of decaying back to zero.
+- Actual EE motion tracks the held reference within the configured tolerance.
+
+### Whole-Body X/XYZ
+
+Run the same launch for `force_axis:=x` and `force_axis:=xyz`:
+
+```bash
+bash $CLEANUP
+
+ros2 launch pr2_mujoco_bridge pr2_whole_body_force_tracking.launch.py \
+  use_viewer:=false \
+  force_axis:=x \
+  log_file:=/tmp/wb_ft_x.csv
+
+python3 $VALIDATOR \
+  --csv /tmp/wb_ft_x.csv \
+  --force-tracking \
+  --reference-prefix ee_des \
+  --actual-prefix pos \
+  --tracking-axes x,y,z \
+  --baseline-skip-samples 60 \
+  --tail-samples 120 \
+  --min-reference-peak-mm 90 \
+  --min-actual-peak-mm 50 \
+  --max-tracking-error-mm 90 \
+  --max-reference-tail-drift-mm 2
+
+python3 $VALIDATOR \
+  --csv /tmp/wb_ft_x.csv \
+  --force-tracking \
+  --reference-prefix base_ref \
+  --actual-prefix base \
+  --tracking-axes x,y \
+  --baseline-skip-samples 60 \
+  --tail-samples 120 \
+  --min-reference-peak-mm 90 \
+  --min-actual-peak-mm 40 \
+  --max-tracking-error-mm 120 \
+  --max-reference-tail-drift-mm 2
+```
+
+Expected:
+- The arm and mobile base both publish held dynamic references.
+- The base XY reference is visibly displaced, targeting the 150 mm class.
+- The existing WBC coordinator remains the only whole-body merge point.
+
 ## Logs And Artifacts
 
 - CSV logs are written to the exact `/tmp/*.csv` paths shown above unless you override `log_file:=...`.
-- `validate_force_response.py` now checks peak displacement, final residual, tail standard deviation, and tail drift.
-- `plot_arm_response.py` creates the five-panel raw response figure from a CSV log: external force input, admittance output, actual end-effector displacement, execution-command summary, and tail zoom. Example:
+- `validate_force_response.py` checks fixed-equilibrium peak/final/tail metrics and optional force-tracking reference peak, actual peak, tracking error, and reference tail drift.
+- `plot_arm_response.py` creates the six-panel raw response figure from a CSV log: external force input, dynamic reference/admittance output, actual end-effector displacement, tracking error, execution-command summary, and tail zoom. Example:
 
 ```bash
 python3 pr2_ws/src/pr2_mujoco_bridge/scripts/plot_arm_response.py \

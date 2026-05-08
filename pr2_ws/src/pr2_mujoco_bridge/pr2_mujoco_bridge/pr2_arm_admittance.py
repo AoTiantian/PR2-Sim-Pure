@@ -17,6 +17,7 @@ from std_msgs.msg import Float64MultiArray
 from pr2_mujoco_bridge.admittance_core import (
     AdmittanceState,
     AxisGains,
+    ForceTrackingReferenceState,
     apply_deadband,
     clip_norm,
     limit_joint_velocity_near_limits,
@@ -51,6 +52,7 @@ class ArmAdmittanceNode(Node):
             ],
         )
         self.declare_parameter("active_axes", [1, 0, 0])
+        self.declare_parameter("reference_mode", "fixed_equilibrium")
         self.declare_parameter("mass_x", 2.0)
         self.declare_parameter("mass_y", 2.0)
         self.declare_parameter("mass_z", 2.0)
@@ -72,6 +74,13 @@ class ArmAdmittanceNode(Node):
         self.declare_parameter("ee_track_gain", 8.0)
         self.declare_parameter("return_track_gain", 12.0)
         self.declare_parameter("return_ee_vel_max", 0.05)
+        self.declare_parameter("force_reference_gain_x", 0.006)
+        self.declare_parameter("force_reference_gain_y", 0.006)
+        self.declare_parameter("force_reference_gain_z", 0.006)
+        self.declare_parameter("force_reference_vel_max", 0.08)
+        self.declare_parameter("force_reference_disp_max", 0.18)
+        self.declare_parameter("force_reference_idle_decay", 0.84)
+        self.declare_parameter("force_reference_track_gain", 7.5)
         self.declare_parameter("nullspace_gain", 0.0)
         self.declare_parameter("qdot_des_max", 0.22)
         self.declare_parameter("return_qdot_des_max", 0.3)
@@ -90,6 +99,9 @@ class ArmAdmittanceNode(Node):
         self._command_frame = str(self.get_parameter("command_frame").value)
         if self._command_frame not in ("base_link", "world"):
             raise ValueError("command_frame must be base_link or world")
+        self._reference_mode = str(self.get_parameter("reference_mode").value)
+        if self._reference_mode not in ("fixed_equilibrium", "force_tracking"):
+            raise ValueError("reference_mode must be fixed_equilibrium or force_tracking")
 
         model_path = str(self.get_parameter("model_path").value)
         ee_body_name = str(self.get_parameter("ee_body_name").value)
@@ -144,6 +156,30 @@ class ArmAdmittanceNode(Node):
         self._ee_track_gain = float(self.get_parameter("ee_track_gain").value)
         self._return_track_gain = float(self.get_parameter("return_track_gain").value)
         self._return_ee_vel_max = float(self.get_parameter("return_ee_vel_max").value)
+        self._force_reference_gain = np.array(
+            [
+                self.get_parameter("force_reference_gain_x").value,
+                self.get_parameter("force_reference_gain_y").value,
+                self.get_parameter("force_reference_gain_z").value,
+            ],
+            dtype=np.float64,
+        )
+        self._force_reference_vel_max = np.full(
+            3,
+            float(self.get_parameter("force_reference_vel_max").value),
+            dtype=np.float64,
+        )
+        self._force_reference_disp_max = np.full(
+            3,
+            float(self.get_parameter("force_reference_disp_max").value),
+            dtype=np.float64,
+        )
+        self._force_reference_idle_decay = float(
+            self.get_parameter("force_reference_idle_decay").value
+        )
+        self._force_reference_track_gain = float(
+            self.get_parameter("force_reference_track_gain").value
+        )
         self._nullspace_gain = float(self.get_parameter("nullspace_gain").value)
         self._qdot_des_max = float(self.get_parameter("qdot_des_max").value)
         self._return_qdot_des_max = float(self.get_parameter("return_qdot_des_max").value)
@@ -224,6 +260,7 @@ class ArmAdmittanceNode(Node):
                 self._all_joint_vadr[joint_name] = int(self._model.jnt_dofadr[joint_id])
 
         self._adm_state = AdmittanceState.zeros(dim=3)
+        self._force_ref_state = ForceTrackingReferenceState.zeros(dim=3)
         self._force_raw = np.zeros(3, dtype=np.float64)
         self._force_filtered = np.zeros(3, dtype=np.float64)
         self._force_frame_id = "base_link"
@@ -245,7 +282,8 @@ class ArmAdmittanceNode(Node):
         self.create_timer(self._dt, self._control_loop)
 
         self.get_logger().info(
-            f"arm admittance: frame={self._command_frame}, active_axes={self._active_mask.tolist()}, "
+            f"arm admittance: mode={self._reference_mode}, frame={self._command_frame}, "
+            f"active_axes={self._active_mask.tolist()}, "
             f"M={self._gains.mass.tolist()}, D={self._gains.damping.tolist()}, "
             f"K={self._gains.stiffness.tolist()}"
         )
@@ -377,6 +415,7 @@ class ArmAdmittanceNode(Node):
             self._ee_home_cmd = ee_pos_cmd.copy()
             self._q_home = self._q_cur.copy()
             self._adm_state = AdmittanceState.zeros(dim=3)
+            self._force_ref_state = ForceTrackingReferenceState.zeros(dim=3)
             self._force_filtered[:] = 0.0
             self._q_dot_cmd[:] = 0.0
             tau = tau_bias + m_arm @ (self._kd * (-self._qdot_cur))
@@ -388,41 +427,64 @@ class ArmAdmittanceNode(Node):
             self._ee_home_cmd = ee_pos_cmd.copy()
             self._q_home = self._q_cur.copy()
 
-        force_cmd = self._force_in_command_frame(base_rot)
-        self._force_filtered = (
-            (1.0 - self._wrench_filter_alpha) * self._force_filtered
-            + self._wrench_filter_alpha * force_cmd
-        )
-        force_cmd = apply_deadband(
-            self._active_mask * self._force_filtered,
-            self._force_deadband,
-        )
-        return_mode = not np.any(np.abs(force_cmd) > 1.0e-9)
+        force_cmd_raw = self._active_mask * self._force_in_command_frame(base_rot)
+        if self._reference_mode == "force_tracking":
+            self._force_ref_state = self._force_ref_state.step(
+                force=force_cmd_raw,
+                dt=self._dt,
+                force_deadband=self._force_deadband,
+                filter_alpha=self._wrench_filter_alpha,
+                force_to_velocity_gain=self._force_reference_gain,
+                max_velocity=self._force_reference_vel_max,
+                max_displacement=self._force_reference_disp_max,
+                idle_velocity_decay=self._force_reference_idle_decay,
+            )
+            self._force_filtered = self._force_ref_state.filtered_force.copy()
+            self._adm_state = AdmittanceState(
+                displacement=self._force_ref_state.reference.copy(),
+                velocity=self._force_ref_state.velocity.copy(),
+            )
+            ee_des_cmd = self._ee_home_cmd + self._adm_state.displacement
+            ee_vel_cmd = self._adm_state.velocity + self._force_reference_track_gain * (
+                ee_des_cmd - ee_pos_cmd
+            )
+            ee_vel_cmd = clip_norm(ee_vel_cmd, self._ee_vel_max)
+            qdot_des_max = self._qdot_des_max
+        else:
+            self._force_filtered = (
+                (1.0 - self._wrench_filter_alpha) * self._force_filtered
+                + self._wrench_filter_alpha * force_cmd_raw
+            )
+            force_cmd = apply_deadband(
+                self._active_mask * self._force_filtered,
+                self._force_deadband,
+            )
+            return_mode = not np.any(np.abs(force_cmd) > 1.0e-9)
 
-        self._adm_state = self._adm_state.step(force=force_cmd, gains=self._gains, dt=self._dt)
-        disp = np.clip(
-            self._adm_state.displacement,
-            -self._ee_disp_max,
-            self._ee_disp_max,
-        )
-        vel = clip_norm(self._adm_state.velocity, self._ee_vel_max)
-        for axis in range(3):
-            if abs(disp[axis]) >= self._ee_disp_max and vel[axis] * disp[axis] > 0.0:
-                vel[axis] = 0.0
-        self._adm_state = settle_admittance_state(
-            state=AdmittanceState(displacement=disp, velocity=vel),
-            force=force_cmd,
-            force_epsilon=np.full(3, 1.0e-9, dtype=np.float64),
-            displacement_epsilon=self._settle_disp_eps,
-            velocity_epsilon=self._settle_vel_eps,
-        )
+            self._adm_state = self._adm_state.step(force=force_cmd, gains=self._gains, dt=self._dt)
+            disp = np.clip(
+                self._adm_state.displacement,
+                -self._ee_disp_max,
+                self._ee_disp_max,
+            )
+            vel = clip_norm(self._adm_state.velocity, self._ee_vel_max)
+            for axis in range(3):
+                if abs(disp[axis]) >= self._ee_disp_max and vel[axis] * disp[axis] > 0.0:
+                    vel[axis] = 0.0
+            self._adm_state = settle_admittance_state(
+                state=AdmittanceState(displacement=disp, velocity=vel),
+                force=force_cmd,
+                force_epsilon=np.full(3, 1.0e-9, dtype=np.float64),
+                displacement_epsilon=self._settle_disp_eps,
+                velocity_epsilon=self._settle_vel_eps,
+            )
 
-        ee_des_cmd = self._ee_home_cmd + self._adm_state.displacement
-        track_gain = self._return_track_gain if return_mode else self._ee_track_gain
-        ee_vel_max = self._return_ee_vel_max if return_mode else self._ee_vel_max
-        qdot_des_max = self._return_qdot_des_max if return_mode else self._qdot_des_max
-        ee_vel_cmd = self._adm_state.velocity + track_gain * (ee_des_cmd - ee_pos_cmd)
-        ee_vel_cmd = clip_norm(ee_vel_cmd, ee_vel_max)
+            ee_des_cmd = self._ee_home_cmd + self._adm_state.displacement
+            track_gain = self._return_track_gain if return_mode else self._ee_track_gain
+            ee_vel_max = self._return_ee_vel_max if return_mode else self._ee_vel_max
+            qdot_des_max = self._return_qdot_des_max if return_mode else self._qdot_des_max
+            ee_vel_cmd = self._adm_state.velocity + track_gain * (ee_des_cmd - ee_pos_cmd)
+            ee_vel_cmd = clip_norm(ee_vel_cmd, ee_vel_max)
 
         qdot_target = solve_dls_velocity_with_nullspace(
             jacobian=jac_cmd,

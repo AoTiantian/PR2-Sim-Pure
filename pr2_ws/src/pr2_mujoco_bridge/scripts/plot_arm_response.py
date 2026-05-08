@@ -6,12 +6,13 @@ admittance debug columns were added.  Legacy logs that only contain force and
 end-effector pose still work, but the admittance-output and execution-command
 panels will explicitly say that those channels are missing.
 
-Five panels are generated:
+Six panels are generated:
   1. external force input;
-  2. admittance-module output, i.e. desired displacement/velocity;
+  2. dynamic reference or admittance-module output;
   3. actual end-effector response, relative to the baseline pose;
-  4. execution-layer command summary, i.e. qdot/tau command norms;
-  5. tail zoom of the actual end-effector response for settle/stability checks.
+  4. tracking error when reference columns are present;
+  5. execution-layer command summary, i.e. qdot/tau command norms;
+  6. tail zoom of the actual end-effector response for settle/stability checks.
 """
 
 from __future__ import annotations
@@ -122,9 +123,10 @@ def plot_response(
     t = time_axis(data)
     window = force_window(data, t)
 
-    fig = plt.figure(figsize=(15, 13))
+    fig = plt.figure(figsize=(15, 15))
     fig.suptitle(title, fontsize=14, fontweight="bold")
-    gs = gridspec.GridSpec(5, 1, figure=fig, hspace=0.42)
+    gs = gridspec.GridSpec(6, 1, figure=fig, hspace=0.42)
+    has_reference = all(series(data, f"ee_des_{axis}") is not None for axis in AXES)
 
     # 1. External force input.
     ax_force = fig.add_subplot(gs[0, 0])
@@ -137,9 +139,20 @@ def plot_response(
     ax_force.grid(True, alpha=0.35)
     ax_force.legend(loc="upper right", ncol=3, fontsize=8)
 
-    # 2. Admittance output.
+    # 2. Dynamic reference / admittance output.
     ax_adm = fig.add_subplot(gs[1, 0], sharex=ax_force)
-    if all(series(data, f"adm_disp_{axis}") is not None for axis in AXES):
+    if has_reference:
+        for axis in AXES:
+            ref = series(data, f"ee_des_{axis}")
+            assert ref is not None
+            ref_rel = baseline_relative(ref, baseline_skip_samples)
+            ax_adm.plot(t, ref_rel * 1000.0, label=f"x_ref {axis.upper()}",
+                        color=COLORS[axis], linewidth=1.5)
+        annotate_force_window(ax_adm, window)
+        ax_adm.set_ylabel("Reference [mm]")
+        ax_adm.grid(True, alpha=0.35)
+        ax_adm.legend(loc="upper right", ncol=3, fontsize=8)
+    elif all(series(data, f"adm_disp_{axis}") is not None for axis in AXES):
         for axis in AXES:
             adm_disp = series(data, f"adm_disp_{axis}")
             assert adm_disp is not None
@@ -160,7 +173,7 @@ def plot_response(
         ax_adm.legend(loc="upper right", ncol=3, fontsize=8)
     else:
         add_missing_panel(ax_adm, "CSV has no adm_disp_* / adm_vel_* columns;\nrerun simulation with the updated logger.")
-    ax_adm.set_title("2) Admittance module output (desired motion)")
+    ax_adm.set_title("2) Dynamic reference / admittance output")
 
     # 3. Actual EE response.
     ax_ee = fig.add_subplot(gs[2, 0], sharex=ax_force)
@@ -170,14 +183,38 @@ def plot_response(
         ee_rel[axis] = rel
         ax_ee.plot(t, rel * 1000.0, label=f"Δp {axis.upper()}",
                    color=COLORS[axis], linewidth=1.4)
+        if has_reference:
+            ref = series(data, f"ee_des_{axis}")
+            assert ref is not None
+            ref_rel = baseline_relative(ref, baseline_skip_samples)
+            ax_ee.plot(t, ref_rel * 1000.0, label=f"x_ref {axis.upper()}",
+                       color=COLORS[axis], linestyle="--", alpha=0.65, linewidth=1.0)
     annotate_force_window(ax_ee, window)
     ax_ee.set_title("3) Actual end-effector response")
     ax_ee.set_ylabel("EE displacement [mm]")
     ax_ee.grid(True, alpha=0.35)
     ax_ee.legend(loc="upper right", ncol=3, fontsize=8)
 
-    # 4. Execution-layer commands.
-    ax_cmd = fig.add_subplot(gs[3, 0], sharex=ax_force)
+    # 4. Tracking error.
+    ax_err = fig.add_subplot(gs[3, 0], sharex=ax_force)
+    if has_reference:
+        for axis in AXES:
+            ref = series(data, f"ee_des_{axis}")
+            assert ref is not None
+            ref_rel = baseline_relative(ref, baseline_skip_samples)
+            err = ee_rel[axis] - ref_rel
+            ax_err.plot(t, err * 1000.0, label=f"e {axis.upper()}",
+                        color=COLORS[axis], linewidth=1.3)
+        annotate_force_window(ax_err, window)
+        ax_err.set_ylabel("Tracking error [mm]")
+        ax_err.grid(True, alpha=0.35)
+        ax_err.legend(loc="upper right", ncol=3, fontsize=8)
+    else:
+        add_missing_panel(ax_err, "CSV has no ee_des_* columns;\ntracking error is unavailable.")
+    ax_err.set_title("4) Actual - reference tracking error")
+
+    # 5. Execution-layer commands.
+    ax_cmd = fig.add_subplot(gs[4, 0], sharex=ax_force)
     plotted_cmd = False
     qdot_norm = series(data, "qdot_cmd_norm")
     tau_norm = series(data, "tau_norm")
@@ -201,10 +238,10 @@ def plot_response(
         ax_cmd.legend(loc="upper left", fontsize=8)
     else:
         add_missing_panel(ax_cmd, "CSV has no qdot_cmd_norm / tau_norm / tau_max_abs columns;\ncommand-layer oscillation cannot be judged.")
-    ax_cmd.set_title("4) Execution-layer command")
+    ax_cmd.set_title("5) Execution-layer command")
 
-    # 5. Tail zoom.
-    ax_tail = fig.add_subplot(gs[4, 0])
+    # 6. Tail zoom.
+    ax_tail = fig.add_subplot(gs[5, 0])
     tail_start = max(0.0, float(t[-1]) - tail_window_s)
     if window.release is not None:
         tail_start = max(tail_start, float(window.release))
@@ -214,7 +251,7 @@ def plot_response(
     for axis in AXES:
         ax_tail.plot(t[tail_mask], ee_rel[axis][tail_mask] * 1000.0,
                      label=f"tail Δp {axis.upper()}", color=COLORS[axis], linewidth=1.5)
-    ax_tail.set_title("5) Tail zoom for settle check")
+    ax_tail.set_title("6) Tail zoom for settle check")
     ax_tail.set_xlabel("Time [s]")
     ax_tail.set_ylabel("EE displacement [mm]")
     ax_tail.grid(True, alpha=0.35)
@@ -230,7 +267,7 @@ def plot_response(
                  va="top", ha="left", fontsize=8,
                  bbox=dict(boxstyle="round", facecolor="white", alpha=0.75))
 
-    for ax in (ax_force, ax_adm, ax_ee, ax_cmd):
+    for ax in (ax_force, ax_adm, ax_ee, ax_err, ax_cmd):
         ax.tick_params(labelbottom=False)
 
     if save:

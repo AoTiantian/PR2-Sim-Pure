@@ -1,0 +1,195 @@
+"""Whole-body force-tracking reference demo for PR2.
+
+This first-stage launch uses the existing coordinator stack and enables
+force-tracking references on both arm and base admittance nodes.  It is not a
+QP/WBC solver; the WBC coordinator remains the single merge point.
+"""
+
+import os
+from pathlib import Path
+
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+
+def _default_model_path() -> str:
+    suffix = Path("unitree_mujoco") / "unitree_robots" / "pr2" / "scene.xml"
+    candidates = []
+    env_path = os.environ.get("PR2_MUJOCO_MODEL_PATH")
+    if env_path:
+        candidates.append(Path(env_path))
+    cwd = Path.cwd().resolve()
+    candidates.extend([
+        cwd / suffix,
+        cwd.parent / suffix,
+        Path(__file__).resolve().parents[4] / suffix,
+        Path("/workspace") / suffix,
+    ])
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return str(candidates[-1])
+
+
+def generate_launch_description() -> LaunchDescription:
+    model_arg = DeclareLaunchArgument("model_path", default_value=_default_model_path())
+    log_arg = DeclareLaunchArgument("log_file", default_value="/tmp/wb_force_tracking.csv")
+    force_axis_arg = DeclareLaunchArgument(
+        "force_axis",
+        default_value="x",
+        description="Injected force axis: x / xyz",
+    )
+    force_mag_arg = DeclareLaunchArgument("force_magnitude", default_value="10.0")
+    waveform_arg = DeclareLaunchArgument("waveform", default_value="step")
+    settle_arg = DeclareLaunchArgument("settle_duration", default_value="5.0")
+    viewer_arg = DeclareLaunchArgument("use_viewer", default_value="false")
+
+    model_path = LaunchConfiguration("model_path")
+    log_file = LaunchConfiguration("log_file")
+    force_axis = LaunchConfiguration("force_axis")
+    force_magnitude = LaunchConfiguration("force_magnitude")
+    waveform = LaunchConfiguration("waveform")
+    settle_duration = LaunchConfiguration("settle_duration")
+    use_viewer = LaunchConfiguration("use_viewer")
+
+    sim_node = Node(
+        package="pr2_mujoco_bridge",
+        executable="pr2_mujoco_sim",
+        name="pr2_mujoco_sim",
+        output="screen",
+        parameters=[{
+            "model_path": model_path,
+            "use_viewer": ParameterValue(use_viewer, value_type=bool),
+            "demo_motion": False,
+        }],
+    )
+
+    arm_adm_node = Node(
+        package="pr2_mujoco_bridge",
+        executable="pr2_arm_admittance",
+        name="pr2_arm_admittance",
+        output="screen",
+        parameters=[{
+            "model_path": model_path,
+            "reference_mode": "force_tracking",
+            "active_axes": [1, 1, 1],
+            "control_frequency": 100.0,
+            "dls_lambda": 0.28,
+            "wrench_filter_alpha": 0.30,
+            "ee_vel_max": 0.075,
+            "ee_disp_max": 0.18,
+            "force_reference_gain_x": 0.006,
+            "force_reference_gain_y": 0.006,
+            "force_reference_gain_z": 0.006,
+            "force_reference_vel_max": 0.075,
+            "force_reference_disp_max": 0.18,
+            "force_reference_idle_decay": 0.84,
+            "force_reference_track_gain": 7.0,
+            "nullspace_gain": 0.10,
+            "qdot_des_max": 0.16,
+            "qdot_smoothing_alpha": 0.34,
+            "torque_kp": 18.0,
+            "torque_kd": 18.0,
+            "max_torque": 60.0,
+            "ee_body_name": "l_gripper_tool_frame",
+            "joint_command_topic": "wbc/arm/joint_command",
+        }],
+    )
+
+    projector_node = Node(
+        package="pr2_mujoco_bridge",
+        executable="pr2_force_projector",
+        name="pr2_force_projector",
+        output="screen",
+        parameters=[{
+            "input_topic": "wbc/arm/external_wrench",
+            "ee_pose_topic": "wbc/arm/ee_pose_log",
+            "output_topic": "wbc/external_wrench",
+            "planar_force_scale": 0.40,
+            "yaw_torque_scale": 0.05,
+            "filter_alpha": 0.18,
+        }],
+    )
+
+    base_adm_node = Node(
+        package="pr2_mujoco_bridge",
+        executable="pr2_base_admittance",
+        name="pr2_base_admittance",
+        output="screen",
+        parameters=[{
+            "input_topic": "wbc/external_wrench",
+            "odom_topic": "odom",
+            "output_topic": "wbc/reference/cmd_vel",
+            "reference_mode": "force_tracking",
+            "wrench_filter_alpha": 0.22,
+            "force_reference_gain_linear": 0.020,
+            "force_reference_gain_angular": 0.080,
+            "force_reference_max_linear_speed": 0.18,
+            "force_reference_max_angular_speed": 0.35,
+            "force_reference_max_linear_displacement": 0.18,
+            "force_reference_max_yaw_displacement": 0.35,
+            "force_reference_idle_decay": 0.86,
+            "force_reference_track_gain_linear": 3.8,
+            "force_reference_track_gain_angular": 3.0,
+            "max_linear_speed": 0.18,
+            "max_angular_speed": 0.35,
+        }],
+    )
+
+    wbc_node = Node(
+        package="pr2_mujoco_bridge",
+        executable="pr2_wbc_coordinator",
+        name="pr2_wbc_coordinator",
+        output="screen",
+        parameters=[{
+            "arm_joint_cmd_topic": "wbc/arm/joint_command",
+            "nullspace_enable": False,
+        }],
+    )
+
+    injector_node = Node(
+        package="pr2_mujoco_bridge",
+        executable="pr2_arm_force_injector",
+        name="pr2_arm_force_injector",
+        output="screen",
+        parameters=[{
+            "force_axis": ParameterValue(force_axis, value_type=str),
+            "force_magnitude": force_magnitude,
+            "step_duration": 3.0,
+            "injection_delay": 1.0,
+            "ready_delay": 1.5,
+            "settle_duration": settle_duration,
+            "log_file": log_file,
+            "publish_rate": 100.0,
+            "waveform": ParameterValue(waveform, value_type=str),
+        }],
+    )
+
+    shutdown_when_done = RegisterEventHandler(
+        OnProcessExit(
+            target_action=injector_node,
+            on_exit=[EmitEvent(event=Shutdown(reason="whole-body force tracking completed"))],
+        )
+    )
+
+    return LaunchDescription([
+        model_arg,
+        log_arg,
+        force_axis_arg,
+        force_mag_arg,
+        waveform_arg,
+        settle_arg,
+        viewer_arg,
+        sim_node,
+        arm_adm_node,
+        projector_node,
+        base_adm_node,
+        wbc_node,
+        injector_node,
+        shutdown_when_done,
+    ])

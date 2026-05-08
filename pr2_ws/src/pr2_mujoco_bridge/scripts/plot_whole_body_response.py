@@ -61,7 +61,22 @@ def main() -> None:
     force = np.vstack([arr(rows, f"force_{a}") for a in AXES]).T
     pos = {a: (arr(rows, f"pos_{a}") - arr(rows, f"pos_{a}")[idx]) * 1000.0 for a in AXES}
     base = {a: (arr(rows, f"base_{a}") - arr(rows, f"base_{a}")[idx]) * 1000.0 for a in "xy"}
+    has_ee_ref = all(f"ee_des_{a}" in rows[0] for a in AXES)
+    has_base_ref = all(f"base_ref_{a}" in rows[0] for a in ("x", "y", "yaw"))
+    ee_ref = {
+        a: (arr(rows, f"ee_des_{a}") - arr(rows, f"ee_des_{a}")[idx]) * 1000.0
+        for a in AXES
+    } if has_ee_ref else {}
+    base_ref = {
+        a: (arr(rows, f"base_ref_{a}") - arr(rows, f"base_ref_{a}")[idx]) * 1000.0
+        for a in "xy"
+    } if has_base_ref else {}
     yaw = (arr(rows, "base_yaw") - arr(rows, "base_yaw")[idx]) * 180.0 / np.pi
+    yaw_ref = (
+        (arr(rows, "base_ref_yaw") - arr(rows, "base_ref_yaw")[idx]) * 180.0 / np.pi
+        if has_base_ref
+        else None
+    )
     onset, release = force_window(force, t)
 
     plt.style.use("seaborn-v0_8-whitegrid")
@@ -82,14 +97,25 @@ def main() -> None:
 
     for axis in AXES:
         axs[1].plot(t, pos[axis], color=COLORS[axis], lw=1.9, label=f"EE Δ{axis.upper()}")
+        if has_ee_ref:
+            axs[1].plot(t, ee_ref[axis], color=COLORS[axis], lw=1.1, ls="--", alpha=0.65,
+                        label=f"EE ref {axis.upper()}")
     axs[1].set_ylabel("EE displacement [mm]")
     axs[1].legend(ncol=3, loc="upper right")
     axs[1].set_title("Arm end-effector compliant displacement")
 
     axs[2].plot(t, base["x"], color="#12b886", lw=2, label="base ΔX [mm]")
     axs[2].plot(t, base["y"], color="#15aabf", lw=2, label="base ΔY [mm]")
+    if has_base_ref:
+        axs[2].plot(t, base_ref["x"], color="#12b886", lw=1.2, ls="--", alpha=0.65,
+                    label="base ref X [mm]")
+        axs[2].plot(t, base_ref["y"], color="#15aabf", lw=1.2, ls="--", alpha=0.65,
+                    label="base ref Y [mm]")
     ax2 = axs[2].twinx()
     ax2.plot(t, yaw, color="#f76707", lw=1.7, label="base yaw [deg]")
+    if yaw_ref is not None:
+        ax2.plot(t, yaw_ref, color="#f76707", lw=1.1, ls="--", alpha=0.65,
+                 label="base yaw ref [deg]")
     axs[2].set_ylabel("Base translation [mm]")
     ax2.set_ylabel("Base yaw [deg]")
     axs[2].set_xlabel("Time [s]")
@@ -98,10 +124,16 @@ def main() -> None:
     lines2, labels2 = ax2.get_legend_handles_labels()
     axs[2].legend(lines + lines2, labels + labels2, ncol=3, loc="upper right")
 
+    base_error = ""
+    if has_base_ref:
+        err_x = np.max(np.abs(base["x"] - base_ref["x"]))
+        err_y = np.max(np.abs(base["y"] - base_ref["y"]))
+        base_error = f"\nBase track err: {max(err_x, err_y):.1f} mm"
     summary = (
         f"EE peak: {max(np.max(np.abs(v)) for v in pos.values()):.1f} mm\n"
         f"Base XY peak: {max(np.max(np.abs(v)) for v in base.values()):.1f} mm\n"
         f"Yaw peak: {np.max(np.abs(yaw)):.2f} deg"
+        f"{base_error}"
     )
     axs[2].text(0.012, 0.96, summary, transform=axs[2].transAxes, va="top", bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
 

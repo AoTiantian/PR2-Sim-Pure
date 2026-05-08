@@ -59,3 +59,34 @@ def test_whole_body_architecture_has_documented_bypass_surfaces_for_future_clean
     assert '"cmd_vel"' in sim_source
     # The meeting plan requires this risk to stay visible during the follow-up work.
     assert "单一控制器" in plan_text or "single-controller" in plan_text
+
+
+def test_force_tracking_launches_keep_default_stack_paths_and_enable_reference_mode():
+    arm_launch = _read_package_file("launch/pr2_arm_force_tracking.launch.py")
+    whole_body_launch = _read_package_file("launch/pr2_whole_body_force_tracking.launch.py")
+
+    assert '"reference_mode": "force_tracking"' in arm_launch
+    assert '"reference_mode": "force_tracking"' in whole_body_launch
+    assert '"demo_motion": False' in arm_launch
+    assert '"demo_motion": False' in whole_body_launch
+    assert '"joint_command_topic": "wbc/arm/joint_command"' in whole_body_launch
+    assert '"output_topic": "wbc/reference/cmd_vel"' in whole_body_launch
+    assert '"nullspace_enable": False' in whole_body_launch
+
+
+def test_force_tracking_csv_and_base_debug_channels_are_declared():
+    injector_source = _read_package_file("pr2_mujoco_bridge/pr2_arm_force_injector.py")
+    base_source = _read_package_file("pr2_mujoco_bridge/pr2_base_admittance.py")
+
+    for expected in (
+        '"base_ref_x"',
+        '"base_ref_y"',
+        '"base_ref_yaw"',
+        '"base_vel_cmd_x"',
+        '"base_vel_cmd_y"',
+        '"base_vel_cmd_yaw"',
+        '"base_admittance_debug_topic"',
+    ):
+        assert expected in injector_source
+    assert 'declare_parameter("debug_topic", "wbc/base/admittance_debug")' in base_source
+    assert "create_publisher(Float64MultiArray" in base_source

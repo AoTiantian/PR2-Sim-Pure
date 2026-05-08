@@ -152,6 +152,63 @@ def settle_admittance_state(
 
 
 @dataclass(frozen=True)
+class ForceTrackingReferenceState:
+    reference: np.ndarray
+    velocity: np.ndarray
+    filtered_force: np.ndarray
+
+    @classmethod
+    def zeros(cls, dim: int) -> "ForceTrackingReferenceState":
+        return cls(
+            reference=np.zeros(dim, dtype=np.float64),
+            velocity=np.zeros(dim, dtype=np.float64),
+            filtered_force=np.zeros(dim, dtype=np.float64),
+        )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reference", _as_array(self.reference))
+        object.__setattr__(self, "velocity", _as_array(self.velocity))
+        object.__setattr__(self, "filtered_force", _as_array(self.filtered_force))
+
+    def step(
+        self,
+        force: np.ndarray,
+        dt: float,
+        force_deadband: np.ndarray,
+        filter_alpha: float,
+        force_to_velocity_gain: np.ndarray,
+        max_velocity: np.ndarray,
+        max_displacement: np.ndarray,
+        idle_velocity_decay: float,
+        velocity_epsilon: float = 1.0e-5,
+    ) -> "ForceTrackingReferenceState":
+        alpha = float(np.clip(filter_alpha, 0.0, 1.0))
+        filtered = (1.0 - alpha) * self.filtered_force + alpha * _as_array(force)
+        active_force = apply_deadband(filtered, _as_array(force_deadband))
+        active = np.any(np.abs(active_force) > 1.0e-12)
+
+        if active:
+            velocity = active_force * _as_array(force_to_velocity_gain)
+            velocity = np.clip(velocity, -_as_array(max_velocity), _as_array(max_velocity))
+        else:
+            decay = float(np.clip(idle_velocity_decay, 0.0, 1.0))
+            velocity = self.velocity * decay
+            velocity[np.abs(velocity) < velocity_epsilon] = 0.0
+
+        max_disp = _as_array(max_displacement)
+        reference = np.clip(self.reference + velocity * max(dt, 0.0), -max_disp, max_disp)
+        outward_at_upper = (reference >= max_disp) & (velocity > 0.0)
+        outward_at_lower = (reference <= -max_disp) & (velocity < 0.0)
+        velocity[outward_at_upper | outward_at_lower] = 0.0
+
+        return ForceTrackingReferenceState(
+            reference=reference,
+            velocity=velocity,
+            filtered_force=filtered,
+        )
+
+
+@dataclass(frozen=True)
 class AxisGains:
     mass: np.ndarray
     damping: np.ndarray

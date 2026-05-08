@@ -15,10 +15,12 @@ from rclpy.node import Node
 from pr2_mujoco_bridge.admittance_core import (
     AdmittanceState,
     AxisGains,
+    ForceTrackingReferenceState,
     apply_deadband,
     clip_norm,
     settle_admittance_state,
 )
+from std_msgs.msg import Float64MultiArray
 
 
 def _yaw_from_quaternion_xyzw(x: float, y: float, z: float, w: float) -> float:
@@ -42,7 +44,9 @@ class BaseAdmittanceNode(Node):
         self.declare_parameter("input_topic", "wbc/external_wrench")
         self.declare_parameter("odom_topic", "odom")
         self.declare_parameter("output_topic", "wbc/reference/cmd_vel")
+        self.declare_parameter("debug_topic", "wbc/base/admittance_debug")
         self.declare_parameter("publish_rate_hz", 100.0)
+        self.declare_parameter("reference_mode", "fixed_equilibrium")
         self.declare_parameter("mass_linear", [18.0, 18.0])
         self.declare_parameter("damping_linear", [55.0, 55.0])
         self.declare_parameter("stiffness_linear", [32.0, 32.0])
@@ -60,6 +64,15 @@ class BaseAdmittanceNode(Node):
         self.declare_parameter("max_angular_speed", 0.28)
         self.declare_parameter("max_linear_displacement", 0.18)
         self.declare_parameter("max_yaw_displacement", 0.35)
+        self.declare_parameter("force_reference_gain_linear", 0.020)
+        self.declare_parameter("force_reference_gain_angular", 0.080)
+        self.declare_parameter("force_reference_max_linear_speed", 0.18)
+        self.declare_parameter("force_reference_max_angular_speed", 0.35)
+        self.declare_parameter("force_reference_max_linear_displacement", 0.18)
+        self.declare_parameter("force_reference_max_yaw_displacement", 0.35)
+        self.declare_parameter("force_reference_idle_decay", 0.86)
+        self.declare_parameter("force_reference_track_gain_linear", 3.8)
+        self.declare_parameter("force_reference_track_gain_angular", 3.0)
         self.declare_parameter("settle_linear_displacement_epsilon", 0.004)
         self.declare_parameter("settle_yaw_displacement_epsilon", 0.008)
         self.declare_parameter("settle_linear_velocity_epsilon", 0.004)
@@ -69,6 +82,10 @@ class BaseAdmittanceNode(Node):
         self._input_topic = str(self.get_parameter("input_topic").value)
         self._odom_topic = str(self.get_parameter("odom_topic").value)
         self._output_topic = str(self.get_parameter("output_topic").value)
+        self._debug_topic = str(self.get_parameter("debug_topic").value)
+        self._reference_mode = str(self.get_parameter("reference_mode").value)
+        if self._reference_mode not in ("fixed_equilibrium", "force_tracking"):
+            raise ValueError("reference_mode must be fixed_equilibrium or force_tracking")
         hz = float(self.get_parameter("publish_rate_hz").value)
         self._dt = 1.0 / max(hz, 1.0)
 
@@ -108,6 +125,39 @@ class BaseAdmittanceNode(Node):
         self._max_yaw_displacement = float(
             self.get_parameter("max_yaw_displacement").value
         )
+        self._force_reference_gain = np.array(
+            [
+                self.get_parameter("force_reference_gain_linear").value,
+                self.get_parameter("force_reference_gain_linear").value,
+                self.get_parameter("force_reference_gain_angular").value,
+            ],
+            dtype=np.float64,
+        )
+        self._force_reference_max_velocity = np.array(
+            [
+                self.get_parameter("force_reference_max_linear_speed").value,
+                self.get_parameter("force_reference_max_linear_speed").value,
+                self.get_parameter("force_reference_max_angular_speed").value,
+            ],
+            dtype=np.float64,
+        )
+        self._force_reference_max_displacement = np.array(
+            [
+                self.get_parameter("force_reference_max_linear_displacement").value,
+                self.get_parameter("force_reference_max_linear_displacement").value,
+                self.get_parameter("force_reference_max_yaw_displacement").value,
+            ],
+            dtype=np.float64,
+        )
+        self._force_reference_idle_decay = float(
+            self.get_parameter("force_reference_idle_decay").value
+        )
+        self._force_reference_track_gain_linear = float(
+            self.get_parameter("force_reference_track_gain_linear").value
+        )
+        self._force_reference_track_gain_angular = float(
+            self.get_parameter("force_reference_track_gain_angular").value
+        )
         self._settle_disp_eps = np.array(
             [
                 self.get_parameter("settle_linear_displacement_epsilon").value,
@@ -129,18 +179,21 @@ class BaseAdmittanceNode(Node):
         self._raw_wrench_body = np.zeros(3, dtype=np.float64)
         self._filtered_wrench_body = np.zeros(3, dtype=np.float64)
         self._admittance_state = AdmittanceState.zeros(dim=3)
+        self._force_ref_state = ForceTrackingReferenceState.zeros(dim=3)
         self._equilibrium_pose_world: np.ndarray | None = None
         self._current_pose_world: np.ndarray | None = None
         self._current_yaw = 0.0
         self._warned_frame = False
 
         self._pub_cmd = self.create_publisher(Twist, self._output_topic, 10)
+        self._pub_debug = self.create_publisher(Float64MultiArray, self._debug_topic, 10)
         self.create_subscription(WrenchStamped, self._input_topic, self._wrench_cb, 10)
         self.create_subscription(Odometry, self._odom_topic, self._odom_cb, 20)
         self.create_timer(self._dt, self._tick)
 
         self.get_logger().info(
-            f"底盘顺应控制器: {self._input_topic} + {self._odom_topic} -> {self._output_topic}"
+            f"底盘顺应控制器: mode={self._reference_mode}, "
+            f"{self._input_topic} + {self._odom_topic} -> {self._output_topic}"
         )
 
     def _wrench_cb(self, msg: WrenchStamped) -> None:
@@ -174,6 +227,57 @@ class BaseAdmittanceNode(Node):
         if self._current_pose_world is None or self._equilibrium_pose_world is None:
             return
 
+        cy = math.cos(self._current_yaw)
+        sy = math.sin(self._current_yaw)
+        rot_world_body = np.array([[cy, -sy], [sy, cy]], dtype=np.float64)
+
+        if self._reference_mode == "force_tracking":
+            raw_force_world = rot_world_body @ self._raw_wrench_body[:2]
+            raw_wrench_world = np.array(
+                [raw_force_world[0], raw_force_world[1], self._raw_wrench_body[2]],
+                dtype=np.float64,
+            )
+            self._force_ref_state = self._force_ref_state.step(
+                force=raw_wrench_world,
+                dt=self._dt,
+                force_deadband=np.array(
+                    [self._force_deadband, self._force_deadband, self._yaw_deadband],
+                    dtype=np.float64,
+                ),
+                filter_alpha=self._wrench_filter_alpha,
+                force_to_velocity_gain=self._force_reference_gain,
+                max_velocity=self._force_reference_max_velocity,
+                max_displacement=self._force_reference_max_displacement,
+                idle_velocity_decay=self._force_reference_idle_decay,
+            )
+            self._admittance_state = AdmittanceState(
+                displacement=self._force_ref_state.reference.copy(),
+                velocity=self._force_ref_state.velocity.copy(),
+            )
+            desired_pose_world = self._equilibrium_pose_world + self._admittance_state.displacement
+            pose_error_world = desired_pose_world - self._current_pose_world
+            pose_error_world[2] = _wrap_angle(pose_error_world[2])
+
+            vel_world = (
+                self._admittance_state.velocity[:2]
+                + self._force_reference_track_gain_linear * pose_error_world[:2]
+            )
+            vel_world = clip_norm(vel_world, self._max_linear_speed)
+            vel_body = rot_world_body.T @ vel_world
+            wz = (
+                self._admittance_state.velocity[2]
+                + self._force_reference_track_gain_angular * pose_error_world[2]
+            )
+            wz = float(np.clip(wz, -self._max_angular_speed, self._max_angular_speed))
+
+            cmd = Twist()
+            cmd.linear.x = float(vel_body[0])
+            cmd.linear.y = float(vel_body[1])
+            cmd.angular.z = wz
+            self._pub_cmd.publish(cmd)
+            self._publish_debug(desired_pose_world, np.array([vel_body[0], vel_body[1], wz]))
+            return
+
         self._filtered_wrench_body = (
             (1.0 - self._wrench_filter_alpha) * self._filtered_wrench_body
             + self._wrench_filter_alpha * self._raw_wrench_body
@@ -186,9 +290,6 @@ class BaseAdmittanceNode(Node):
             self._filtered_wrench_body[2] = 0.0
         return_mode = not np.any(np.abs(self._filtered_wrench_body) > 1.0e-9)
 
-        cy = math.cos(self._current_yaw)
-        sy = math.sin(self._current_yaw)
-        rot_world_body = np.array([[cy, -sy], [sy, cy]], dtype=np.float64)
         force_world = rot_world_body @ self._filtered_wrench_body[:2]
         wrench_world = np.array(
             [force_world[0], force_world[1], self._filtered_wrench_body[2]],
@@ -243,6 +344,19 @@ class BaseAdmittanceNode(Node):
         cmd.linear.y = float(vel_body[1])
         cmd.angular.z = wz
         self._pub_cmd.publish(cmd)
+        self._publish_debug(desired_pose_world, np.array([vel_body[0], vel_body[1], wz]))
+
+    def _publish_debug(self, base_ref_world: np.ndarray, base_vel_cmd: np.ndarray) -> None:
+        msg = Float64MultiArray()
+        msg.data = [
+            float(base_ref_world[0]),
+            float(base_ref_world[1]),
+            float(base_ref_world[2]),
+            float(base_vel_cmd[0]),
+            float(base_vel_cmd[1]),
+            float(base_vel_cmd[2]),
+        ]
+        self._pub_debug.publish(msg)
 
 
 def main() -> None:
