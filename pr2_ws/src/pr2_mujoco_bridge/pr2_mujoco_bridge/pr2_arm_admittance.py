@@ -78,6 +78,7 @@ class ArmAdmittanceNode(Node):
         self.declare_parameter("force_reference_gain_y", 0.006)
         self.declare_parameter("force_reference_gain_z", 0.006)
         self.declare_parameter("force_reference_vel_max", 0.08)
+        self.declare_parameter("force_reference_vel_norm_max", 0.0)
         self.declare_parameter("force_reference_disp_max", 0.18)
         self.declare_parameter("force_reference_idle_decay", 0.84)
         self.declare_parameter("force_reference_track_gain", 7.5)
@@ -168,6 +169,9 @@ class ArmAdmittanceNode(Node):
             3,
             float(self.get_parameter("force_reference_vel_max").value),
             dtype=np.float64,
+        )
+        self._force_reference_vel_norm_max = float(
+            self.get_parameter("force_reference_vel_norm_max").value
         )
         self._force_reference_disp_max = np.full(
             3,
@@ -438,6 +442,9 @@ class ArmAdmittanceNode(Node):
                 max_velocity=self._force_reference_vel_max,
                 max_displacement=self._force_reference_disp_max,
                 idle_velocity_decay=self._force_reference_idle_decay,
+                max_velocity_norm=self._force_reference_vel_norm_max
+                if self._force_reference_vel_norm_max > 0.0
+                else None,
             )
             self._force_filtered = self._force_ref_state.filtered_force.copy()
             self._adm_state = AdmittanceState(

@@ -1,537 +1,349 @@
-# PR2-Sim-Pure `force_tracking_reference` 本轮更改审阅报告
+# PR2-Sim-Pure `force_tracking_reference` 提交前审阅报告
 
-报告日期：2026-05-08  
-当前分支：`feat`  
-项目所有者：胡子涵  
+报告日期：2026-05-08
+当前分支：`feat`
+项目所有者：胡子涵
 开发结果审阅与验收负责人：江浩华
+报告性质：提交前审阅材料，当前未 stage、未 commit、未 push。
 
-## 1. 审阅背景与本轮目标
+## 1. 项目与审阅背景
 
-本轮开发按照 `/Users/macstudio/Documents/PLAN.md` 执行，目标是在现有 `feat` 分支上实现第一阶段 `force_tracking_reference` 能力。
+本轮开发按照 `/Users/macstudio/Documents/PLAN.md` 推进，目标是在 `feat` 分支实现第一阶段 `force_tracking_reference`。用户明确要求：每次提交更改之前，必须向项目所有者胡子涵和验收负责人江浩华详细汇报做了什么、怎么做、为什么这么做、怎么验证、哪些地方没有验证、风险在哪里。
 
-本轮明确不做以下事项：
+本报告即为本轮提交前审阅材料。报告中列出的 PNG、CSV、MP4 是本轮在本机通过容器补齐 ROS 2 Jazzy + MuJoCo 环境后生成的真实验收产物，不再把仓库旧 whole-body/admittance demo 媒体冒充为本轮结果。
 
-- 不修改 `unitree_mujoco/unitree_robots/pr2/` 下的 MuJoCo XML/MJCF 模型。
-- 不实现优化式 QP/WBC。
-- 不改变现有 fixed-equilibrium 行为的默认地位。
-- 不提交本轮 acceptance 新生成的视频或大型媒体文件。
+## 2. 本轮目标与非目标
 
-本轮新增的核心能力是：外力不再只能触发相对启动平衡点的临时顺应位移，而是可以在 `reference_mode:=force_tracking` 下推动一个动态参考位置；撤力后参考速度衰减到 0，但参考位置保持在新的目标位置，不主动回到启动点。
+本轮目标：
 
-## 2. 我做了什么
+- 实现第一阶段 `force_tracking_reference`：外力推动动态参考位置，撤力后参考速度衰减到 0，参考位置保持。
+- 在 arm 和 base admittance 中加入 `reference_mode:=fixed_equilibrium|force_tracking`。
+- 保持默认 `fixed_equilibrium` 不变，降低对旧验收路径的回归风险。
+- 新增 force-tracking launch、CSV/debug 字段、validator、plot、README/acceptance 文档。
+- 在 Ubuntu 24.04 + ROS 2 Jazzy 等效环境中真实运行构建、测试、acceptance，并生成本轮图片和视频。
 
-### 2.1 新增动态参考状态机
+明确非目标：
 
-在 `pr2_mujoco_bridge/admittance_core.py` 中新增 `ForceTrackingReferenceState`，作为纯 Python/NumPy 状态机。它负责把输入外力转换成可验收的动态参考：
+- 不修改 `unitree_mujoco/unitree_robots/pr2/` 下的 MuJoCo XML/MJCF。
+- 不重写为优化式 QP/WBC。
+- 不改变旧 launch 的默认 fixed-equilibrium 语义。
+- 不 stage、commit、push。
 
-```text
-external force
-  -> filter
-  -> deadband
-  -> bounded reference velocity
-  -> bounded reference position
-  -> idle velocity decay after release
-  -> held reference position
-```
+## 3. 环境补齐与计划偏差纠正
 
-该状态机不依赖 ROS，因此可以用普通 pytest 做快速回归测试。
+初始 macOS host 缺少 ROS 2 Jazzy、`ros2`、`colcon`，Docker daemon 也未运行。这个状态不能作为跳过验收或篡改计划的理由，因此本轮做了环境补齐：
 
-### 2.2 Arm admittance 增加 `reference_mode`
+- 通过 Homebrew 安装 `colima` 和 `docker-buildx`。
+- 启动 Colima：Linux aarch64 Docker daemon，6 CPU、12 GB memory、80 GB disk。
+- 尝试仓库 `.devcontainer/Dockerfile`：
+  - `osrf/ros:jazzy-desktop` 无可用 `linux/arm64` 镜像。
+  - `linux/amd64` 镜像可构建，但 Apple Silicon emulation 下 `import mujoco` 崩溃。
+- 改用原生 arm64 `ros:jazzy-ros-base`，构建本轮验证镜像 `pr2-sim-pure-jazzy-arm64`：
+  - 安装 `python3-colcon-common-extensions`、MuJoCo、OSMesa、matplotlib、Pillow、ffmpeg。
+  - 同一容器中验证 `rclpy` 和 `mujoco 3.8.0` 可 import。
 
-在 `pr2_arm_admittance.py` 中新增参数：
+这一步纠正了先前“缺少环境就只写限制说明”的处理方式。本轮最终 acceptance 是在该 ROS 2 Jazzy 容器中真实运行得到的。
 
-- `reference_mode:=fixed_equilibrium|force_tracking`
-- `force_reference_gain_x/y/z`
-- `force_reference_vel_max`
-- `force_reference_disp_max`
-- `force_reference_idle_decay`
-- `force_reference_track_gain`
+## 4. 改动总览
 
-默认值仍是 `reference_mode:=fixed_equilibrium`。也就是说，现有 launch 如果不显式打开 `force_tracking`，仍走旧路径：撤力后回到启动时捕获的平衡点。
+核心代码：
 
-在 `force_tracking` 模式下：
+- `pr2_mujoco_bridge/admittance_core.py`
+  - 新增 `ForceTrackingReferenceState`。
+  - 新增可选 `max_velocity_norm`，用于多轴 force-tracking 时限制合成参考速度。
+- `pr2_mujoco_bridge/pr2_arm_admittance.py`
+  - 新增 `reference_mode` 分支。
+  - 新增 force reference gains、velocity/displacement bounds、idle decay、track gain。
+  - 新增 arm Cartesian reference velocity norm cap 参数 `force_reference_vel_norm_max`。
+- `pr2_mujoco_bridge/pr2_base_admittance.py`
+  - 新增 `reference_mode` 分支。
+  - 新增 base reference/debug 输出：`base_ref_*`、`base_vel_cmd_*`。
+- `pr2_mujoco_bridge/pr2_arm_force_injector.py`
+  - CSV 增加 base reference 和 base velocity command 列。
 
-- 外力在 command frame 内经 active axes 过滤。
-- `ForceTrackingReferenceState` 生成 `ee_des_*` 动态参考。
-- 控制器以动态参考和当前末端位姿之间的误差生成末端速度命令。
-- 撤力后 reference 不回零，只让 reference velocity 衰减。
-
-### 2.3 Base admittance 增加 `reference_mode` 和 debug 输出
-
-在 `pr2_base_admittance.py` 中新增同样的 `reference_mode:=fixed_equilibrium|force_tracking` 分支。
-
-新增 base debug topic：
-
-- 默认 topic：`wbc/base/admittance_debug`
-- 数据内容：
-  - `base_ref_x`
-  - `base_ref_y`
-  - `base_ref_yaw`
-  - `base_vel_cmd_x`
-  - `base_vel_cmd_y`
-  - `base_vel_cmd_yaw`
-
-这样做的目的是让 whole-body force-tracking 不只看实际 base pose，还能检查“控制器打算让底盘去哪里”，从而区分模型/执行层跟踪不足和参考生成逻辑错误。
-
-### 2.4 新增 force-tracking launch
-
-新增两个 launch 文件：
+Launch：
 
 - `launch/pr2_arm_force_tracking.launch.py`
 - `launch/pr2_whole_body_force_tracking.launch.py`
 
-这两个 launch 都显式设置：
+脚本与测试：
 
-- `reference_mode: "force_tracking"`
-- `demo_motion: False`
-- `use_viewer:=false` 可用于 headless acceptance
+- `scripts/validate_force_response.py` 增加 `--force-tracking` 检查。
+- `scripts/plot_arm_response.py` 增加 reference、tracking error、tail zoom 可视化。
+- `scripts/plot_whole_body_response.py` 增加 arm/base reference overlay。
+- `test/test_admittance_core.py` 增加 dynamic reference、held reference、velocity norm cap 测试。
+- `test/test_validate_force_response.py` 增加 force-tracking validator 覆盖。
 
-Whole-body launch 仍保留现有 coordinator 风格架构：
+文档：
 
-```text
-arm external wrench
-  -> force projector
-  -> base admittance
-  -> pr2_wbc_coordinator
-  -> sim command topics
-```
+- `README.md`
+- `README_ACCEPTANCE_FEAT.md`
+- 本报告：`docs/force_tracking_reference_review_report.md`
+- 本轮真实验收产物目录：`docs/force_tracking_reference_acceptance/`
 
-它不是 QP/WBC solver，也没有声称是优化式 whole-body controller。
+## 5. 实现解释
 
-### 2.5 扩展 CSV 记录
-
-在 `pr2_arm_force_injector.py` 中扩展 CSV 列：
-
-- 原有：`pos_*`, `force_*`, `adm_disp_*`, `adm_vel_*`, `ee_des_*`, `ee_vel_cmd_*`, `qdot_cmd_norm`, `tau_*`, `base_*`
-- 新增：`base_ref_x`, `base_ref_y`, `base_ref_yaw`
-- 新增：`base_vel_cmd_x`, `base_vel_cmd_y`, `base_vel_cmd_yaw`
-
-这些列是后续验收 force-tracking 参考保持和 base 跟踪行为的必要数据。
-
-### 2.6 扩展 validator
-
-在 `scripts/validate_force_response.py` 中新增 `--force-tracking` 模式。
-
-新增检查项包括：
-
-- reference peak 是否达到最低展示/响应幅值。
-- actual peak 是否达到最低响应幅值。
-- actual-reference tracking error 是否在阈值内。
-- 撤力后 reference tail drift 是否足够小。
-
-典型用法：
-
-```bash
-python3 $VALIDATOR \
-  --csv /tmp/arm_ft_x.csv \
-  --force-tracking \
-  --reference-prefix ee_des \
-  --actual-prefix pos \
-  --tracking-axes x,y,z \
-  --baseline-skip-samples 60 \
-  --tail-samples 120 \
-  --min-reference-peak-mm 90 \
-  --min-actual-peak-mm 60 \
-  --max-tracking-error-mm 80 \
-  --max-reference-tail-drift-mm 2
-```
-
-Base force-tracking 则使用：
-
-```bash
-python3 $VALIDATOR \
-  --csv /tmp/wb_ft_x.csv \
-  --force-tracking \
-  --reference-prefix base_ref \
-  --actual-prefix base \
-  --tracking-axes x,y \
-  --baseline-skip-samples 60 \
-  --tail-samples 120 \
-  --min-reference-peak-mm 90 \
-  --min-actual-peak-mm 40 \
-  --max-tracking-error-mm 120 \
-  --max-reference-tail-drift-mm 2
-```
-
-### 2.7 扩展 plotting 脚本和文档
-
-`scripts/plot_arm_response.py` 从五面板扩展为六面板：
-
-1. 外力输入
-2. 动态参考或 admittance 输出
-3. 实际末端响应
-4. actual-reference tracking error
-5. 执行层命令摘要
-6. tail zoom 稳定性检查
-
-`scripts/plot_whole_body_response.py` 现在会在 CSV 有参考列时叠加显示 arm/base reference，并显示 base tracking error 摘要。
-
-`README.md` 和 `README_ACCEPTANCE_FEAT.md` 已补充 force-tracking 模式说明、launch 命令、validator 命令和验收阈值。
-
-## 3. 我是怎么做的
-
-本轮实现按测试先行的顺序推进：
-
-1. 先在 `test_admittance_core.py` 中写 `ForceTrackingReferenceState` 行为测试。
-2. 验证新增测试在实现前失败，因为 `ForceTrackingReferenceState` 尚不存在。
-3. 实现纯状态机，让测试转绿。
-4. 在 arm/base ROS 节点中加入 `reference_mode` 分支，默认保留旧逻辑。
-5. 新增 launch 和 CSV/debug 通道。
-6. 扩展 validator 测试，锁定 held-reference 通过、tail drift 失败这两个关键验收行为。
-7. 更新 plot 和 README，让后续验收可以复现并解释结果。
-
-这一路径的关键点是：先把 force-tracking 的数学行为做成可单元测试的纯逻辑，再接入 ROS 节点和 launch，避免一开始就把问题混在 MuJoCo/ROS 运行时里调试。
-
-## 4. 为什么这样做
-
-### 4.1 保留默认旧模式，降低回归风险
-
-现有 acceptance 建立在 fixed-equilibrium 模式之上。若直接改变默认 admittance 语义，会导致旧的 zero-force、arm 1D/3D、whole-body acceptance 结果不可比较。
-
-所以本轮新增 `reference_mode`，并让默认保持：
+`force_tracking_reference` 的数据路径是：
 
 ```text
-reference_mode := fixed_equilibrium
+external force
+  -> wrench filter
+  -> deadband
+  -> bounded reference velocity
+  -> optional Cartesian velocity norm cap
+  -> bounded reference position
+  -> after force release: velocity decay to zero
+  -> reference position held
 ```
 
-只有新 launch 显式打开：
+具体含义：
+
+- filter/deadband：滤掉微小力和噪声，避免 reference 漂移。
+- bounded reference velocity：力只生成受限参考速度，不直接跳变目标位置。
+- velocity norm cap：多轴同时受力时，限制合成 Cartesian reference 速度，避免每轴单独限幅导致目标速度超过执行侧能力。
+- bounded reference position：限制最大 reference displacement。
+- idle velocity decay：撤力后 reference velocity 衰减到 0。
+- held reference：reference position 不回到启动点，满足本轮 force-tracking 目标。
+
+## 6. 为什么这样做
+
+保留 `fixed_equilibrium` 默认值，是为了降低回归风险。旧验收要求撤力后回到启动平衡点；新验收要求撤力后保持新参考点，两者语义冲突，必须用显式 `reference_mode` 隔离。
+
+不做 QP/WBC 重写，是为了遵守第一阶段范围。当前 whole-body 仍使用已有 coordinator：arm reference、base reference、force projector、WBC coordinator 共同工作，但不声称是优化式 whole-body controller。
+
+新增 validator 和 CSV/debug，是为了让江浩华可以量化验收，而不是只看视觉效果。关键指标包括 reference peak、actual peak、tracking error、reference tail drift。
+
+多轴 velocity norm cap 是本轮真实验收中发现后加入的修复。初版逐轴限幅导致 `xyz` 同时受力时合成 reference 速度过高，arm 与 base 都会出现 tracking error 超阈值。改为合成速度受限后，单轴响应不变，多轴响应获得稳定余量。
+
+## 7. 调试与参数调整记录
+
+真实验收中出现过以下失败，已按根因修复，而不是放宽 validator：
+
+- Arm X 初始上限 180 mm：tracking error 86.631 mm，大于 80 mm。
+- Arm X 上限 160/150 mm 时仍在部分运行中贴近或略超 80 mm。
+- Arm `xyz`：逐轴 reference 约 139-160 mm 时，X/Z 轴 tracking error 超阈值。
+- 修复：加入 `force_reference_vel_norm_max`，arm reference displacement 收敛到 140 mm。
+- Whole-body base：180/140/130 mm base reference 在 `x` 或 `xyz` 中会出现 base tracking error 超阈值。
+- 修复：whole-body force-tracking base linear reference displacement 收敛到 110 mm。
+
+当前结论：
+
+- Arm 单轴保持约 140 mm reference。
+- Arm `xyz` 保持约 105 mm reference。
+- Whole-body base 当前通过的是约 110 mm reference、约 90-95 mm actual motion。
+- 更大的 150 mm-class base motion 仍是后续调参目标，不作为本轮已通过声明。
+
+## 8. 本轮真实媒体与证据
+
+本轮生成目录：
 
 ```text
-reference_mode := force_tracking
+pr2_ws/src/pr2_mujoco_bridge/docs/force_tracking_reference_acceptance/
 ```
 
-### 4.2 把第一阶段目标限制在 dynamic reference
+### 8.1 Arm force-tracking X
 
-PLAN.md 明确第一阶段不做完整 QP/WBC。当前最有价值的验证切片是：外力是否可以稳定地转换成新的参考目标，并在撤力后保持。
+CSV：`force_tracking_reference_acceptance/arm_ft_x.csv`
+Validator：`force_tracking_reference_acceptance/arm_ft_x_validator.txt`
+图片：
 
-这比直接重写 whole-body controller 风险更小，也更容易被江浩华验收：
+![Arm force-tracking X response](force_tracking_reference_acceptance/arm_ft_x_response.png)
 
-- CSV 可以量化 reference peak。
-- CSV 可以量化 actual peak。
-- CSV 可以量化 tracking error。
-- CSV 可以量化撤力后的 reference drift。
+关键指标：
 
-### 4.3 让 arm 和 base 共用同一类行为
+- X reference peak：140.000 mm
+- X actual peak：139.942 mm
+- X tracking error：65.163 mm
+- Result：PASS
 
-Arm 和 base 都使用同一类 force-tracking reference 语义：
+### 8.2 Arm force-tracking XYZ
 
-- arm：`ee_des_*`
-- base：`base_ref_*`
+CSV：`force_tracking_reference_acceptance/arm_ft_xyz.csv`
+Validator：`force_tracking_reference_acceptance/arm_ft_xyz_validator.txt`
+图片：
 
-这样后续验收 whole-body 时，可以用同一个 validator 检查两套参考。
+![Arm force-tracking XYZ response](force_tracking_reference_acceptance/arm_ft_xyz_response.png)
 
-## 5. 媒体状态说明
+关键指标：
 
-本报告附带引用仓库中已有的 whole-body/admittance 演示图片和视频，用于帮助审阅者理解当前 PR2 admittance/whole-body demo 的视觉背景。
+- X/Y/Z reference peak：约 105.3-105.4 mm
+- X/Y/Z actual peak：约 103.5-105.1 mm
+- 最大 tracking error：63.484 mm
+- Result：PASS
 
-重要限制：
+### 8.3 Whole-body force-tracking X
 
-- 下列媒体不是本轮 force-tracking acceptance 新生成结果。
-- 它们来自仓库已有目录 `docs/whole_body_admittance_demo/`。
-- 当前 macOS host 没有 ROS 2 Jazzy、`ros2`、`colcon`，Docker daemon 也未运行，因此本轮没有生成新的 force-tracking PNG/MP4。
-- 新的 force-tracking 媒体应在 devcontainer 或 Ubuntu 24.04 + ROS 2 Jazzy 环境中，通过新增 launch、validator、plot 脚本生成。
+CSV：`force_tracking_reference_acceptance/wb_ft_x.csv`
+Arm validator：`force_tracking_reference_acceptance/wb_ft_x_arm_validator.txt`
+Base validator：`force_tracking_reference_acceptance/wb_ft_x_base_validator.txt`
+图片：
 
-### 5.1 单轴 admittance 响应图
+![Whole-body force-tracking X summary](force_tracking_reference_acceptance/wb_ft_x_summary.png)
 
-X 轴响应：
+关键指标：
 
-![PR2 admittance X axis focus](whole_body_admittance_demo/pr2_admittance_axis_x_focus.png)
+- Arm X reference peak：140.000 mm
+- Arm X actual peak：140.355 mm
+- Arm X tracking error：77.541 mm
+- Base driven-axis reference peak：110.000 mm
+- Base driven-axis actual peak：86.474 mm
+- Base tracking error：103.820 mm
+- Result：arm PASS，base PASS
 
-Y 轴响应：
+### 8.4 Whole-body force-tracking XYZ
 
-![PR2 admittance Y axis focus](whole_body_admittance_demo/pr2_admittance_axis_y_focus.png)
+CSV：`force_tracking_reference_acceptance/wb_ft_xyz.csv`
+Arm validator：`force_tracking_reference_acceptance/wb_ft_xyz_arm_validator.txt`
+Base validator：`force_tracking_reference_acceptance/wb_ft_xyz_base_validator.txt`
+图片：
 
-Z 轴响应：
+![Whole-body force-tracking XYZ summary](force_tracking_reference_acceptance/wb_ft_xyz_summary.png)
 
-![PR2 admittance Z axis focus](whole_body_admittance_demo/pr2_admittance_axis_z_focus.png)
+关键指标：
 
-这些图片适合作为背景材料，说明项目已有 admittance response 可视化风格。它们不代表本轮 `force_tracking_reference` 的新验收结果。
+- Arm reference peak：约 105 mm
+- Arm actual peak：约 98-104 mm
+- Arm 最大 tracking error：68.522 mm
+- Base X/Y reference peak：110.000 mm
+- Base X/Y actual peak：94.708 / 95.448 mm
+- Base 最大 tracking error：93.693 mm
+- Result：arm PASS，base PASS
 
-### 5.2 Whole-body base + arm 汇总图
+### 8.5 本轮生成视频
 
-![PR2 whole-body base arm summary](whole_body_admittance_demo/pr2_whole_body_base_arm_summary.png)
+视频源 CSV：`force_tracking_reference_acceptance/wb_ft_xyz_video_source.csv`
+状态记录：`force_tracking_reference_acceptance/wb_ft_xyz_state.npz`
+渲染记录：`force_tracking_reference_acceptance/wb_ft_xyz_video_render.txt`
+视频：
 
-这张图适合作为 whole-body 响应展示背景，用于说明 arm 和 mobile base 同时参与响应时的可视化目标。
+[Whole-body XYZ force-tracking MP4](force_tracking_reference_acceptance/wb_ft_xyz_force_tracking.mp4)
 
-### 5.3 Whole-body 明显运动截图
+视频源 summary：
 
-![PR2 whole-body obvious motion contact](whole_body_admittance_demo/pr2_wb_obvious_motion_contact.png)
+![Whole-body force-tracking video source summary](force_tracking_reference_acceptance/wb_ft_xyz_video_source_summary.png)
 
-这张图用于说明“强展示”希望达到的视觉效果：base 和 arm 的运动应足够明显，便于审阅和演示。
+视频渲染记录：
 
-### 5.4 Whole-body 演示视频
+- frames：224
+- duration：7.4667 s
+- source EE peak：104.620 mm
+- source base peak：94.671 mm
+- source base yaw peak：0.154 deg
+- video source arm validator：PASS
+- video source base validator：PASS
 
-视频文件：
+## 9. 既有媒体状态说明
 
-[PR2 whole-body XYZ response motion obvious video](whole_body_admittance_demo/pr2_whole_body_xyz_response_motion_obvious.mp4)
+仓库已有媒体仍可作为背景材料，但不作为本轮验收证据：
 
-HTML 预览标签：
+- `docs/whole_body_admittance_demo/pr2_admittance_axis_x_focus.png`
+- `docs/whole_body_admittance_demo/pr2_admittance_axis_y_focus.png`
+- `docs/whole_body_admittance_demo/pr2_admittance_axis_z_focus.png`
+- `docs/whole_body_admittance_demo/pr2_whole_body_base_arm_summary.png`
+- `docs/whole_body_admittance_demo/pr2_wb_obvious_motion_contact.png`
+- `docs/whole_body_admittance_demo/pr2_whole_body_xyz_response_motion_obvious.mp4`
 
-<video controls src="whole_body_admittance_demo/pr2_whole_body_xyz_response_motion_obvious.mp4"></video>
+这些文件来自既有 whole-body/admittance demo。它们可以帮助理解项目展示风格，但不能被声明为本轮 `force_tracking_reference` acceptance 结果。
 
-该视频同样是仓库已有演示资产，不是本轮 force-tracking acceptance 新生成视频。
+## 10. 已通过验证
 
-## 6. 已运行验证
-
-### 6.1 项目结构检查
-
-命令：
-
-```bash
-bash scripts/verify_ai_project.sh
-```
-
-结果：
-
-```text
-PASS: project layout verification passed.
-```
-
-该检查确认：
-
-- 关键说明文件存在。
-- ROS package markers 仍在 workspace `src/` 下。
-- 没有生成并遗留 `build/`, `install/`, `log/`, `.venv`, `venv` 等不应提交目录。
-
-### 6.2 Shell 语法检查
-
-命令：
-
-```bash
-bash -n scripts/verify_ai_project.sh scripts/ai-codex.sh scripts/ai-claude.sh
-```
-
-结果：退出码为 0。
-
-### 6.3 本地可运行 pytest 子集
-
-命令：
+本机 host 纯 Python 快速测试：
 
 ```bash
 PYTHONPATH=pr2_ws/src/pr2_mujoco_bridge \
-/tmp/pr2-sim-pure-test-venv/bin/python -m pytest \
+  /tmp/pr2-sim-pure-test-venv/bin/python -m pytest \
   pr2_ws/src/pr2_mujoco_bridge/test/test_admittance_core.py \
-  pr2_ws/src/pr2_mujoco_bridge/test/test_validate_force_response.py \
-  pr2_ws/src/pr2_mujoco_bridge/test/test_wbc_single_controller.py \
-  pr2_ws/src/pr2_mujoco_bridge/test/test_audit_pr2_mjcf_limits.py \
-  -q
+  pr2_ws/src/pr2_mujoco_bridge/test/test_validate_force_response.py -q
 ```
 
 结果：
 
 ```text
-28 passed in 0.15s
+20 passed in 0.20s
 ```
 
-这组测试覆盖：
-
-- `ForceTrackingReferenceState` 动态参考保持和限幅。
-- `validate_force_response.py` 的 fixed-equilibrium 和 force-tracking 检查。
-- 新 force-tracking launch 的 wiring。
-- CSV/debug 通道声明。
-- 既有 WBC coordinator 单一汇合点约束。
-- MJCF limits 审计测试。
-
-### 6.4 Python 语法编译检查
-
-命令：
+ROS 2 Jazzy arm64 容器测试：
 
 ```bash
-/tmp/pr2-sim-pure-test-venv/bin/python -m compileall -q \
-  pr2_ws/src/pr2_mujoco_bridge/pr2_mujoco_bridge \
-  pr2_ws/src/pr2_mujoco_bridge/scripts \
-  pr2_ws/src/pr2_mujoco_bridge/launch
+colcon build --packages-select pr2_mujoco_bridge --symlink-install
+python3 -m pytest src/pr2_mujoco_bridge/test -q
+colcon test --packages-select pr2_mujoco_bridge
+colcon test-result --verbose --all
 ```
 
-结果：退出码为 0。
-
-### 6.5 Diff 空白检查
-
-命令：
-
-```bash
-git diff --check
-```
-
-结果：退出码为 0。
-
-## 7. 未能运行的验证
-
-### 7.1 全量 pytest
-
-命令：
-
-```bash
-PYTHONPATH=pr2_ws/src/pr2_mujoco_bridge \
-/tmp/pr2-sim-pure-test-venv/bin/python -m pytest \
-  pr2_ws/src/pr2_mujoco_bridge/test -q
-```
-
-结果：未能完成收集。
-
-原因：
+结果：
 
 ```text
-ModuleNotFoundError: No module named 'rclpy'
+colcon build: 1 package finished
+pytest: 30 passed
+colcon test-result: 30 tests, 0 errors, 0 failures, 0 skipped
 ```
 
-当前 macOS host 没有 ROS 2 Jazzy 的 Python runtime，因此导入 `pr2_sim_ros.py` 时缺少 `rclpy`。
+Force-tracking acceptance：
 
-### 7.2 ROS/colcon build 与 acceptance
+- Arm `x`：PASS
+- Arm `y`：PASS
+- Arm `z`：PASS
+- Arm `xyz`：PASS
+- Whole-body `x` arm validator：PASS
+- Whole-body `x` base validator：PASS
+- Whole-body `xyz` arm validator：PASS
+- Whole-body `xyz` base validator：PASS
+- Whole-body `xyz` video source arm validator：PASS
+- Whole-body `xyz` video source base validator：PASS
 
-未能运行：
+Legacy fixed-equilibrium acceptance：
 
-```bash
-source /opt/ros/jazzy/setup.bash
-colcon build --packages-select pr2_mujoco_bridge --symlink-install
-colcon test --packages-select pr2_mujoco_bridge
-ros2 launch pr2_mujoco_bridge pr2_arm_force_tracking.launch.py ...
-ros2 launch pr2_mujoco_bridge pr2_whole_body_force_tracking.launch.py ...
+- Zero-force stability：PASS
+- Single-arm 1D：PASS
+- Single-arm 3D Y：PASS
+- Single-arm 3D Z：PASS
+- Single-arm XYZ：PASS
+- Whole-body X：PASS
+- Whole-body XYZ：FAIL on base tail stability in this container run
+
+Whole-body XYZ fixed-equilibrium failure details:
+
+```text
+Base linear tail std 0.140 mm > 0.050 mm
+Base linear tail drift 0.479 mm > 0.200 mm
+Base yaw tail drift 0.0806 deg > 0.0500 deg
 ```
 
-原因：
+这一路径不是本轮新增 force-tracking launch，但它是旧 acceptance 的剩余风险。当前不建议在本轮顺手改旧 fixed-equilibrium whole-body 参数，除非江浩华决定把它列为本次提交阻塞项。
 
-- `/opt/ros/jazzy/setup.bash` 不存在。
-- `ros2` 不存在。
-- `colcon` 不存在。
-- Docker daemon 未运行，无法进入 devcontainer。
+## 11. 未验证或限制
 
-因此本轮报告中的 force-tracking acceptance 命令已经写入文档，但实际 CSV/PNG/MP4 需要在 Ubuntu 24.04 + ROS 2 Jazzy 环境中补跑。
+- 未在真实 PR2 硬件上运行；本项目当前仍是 simulation-first。
+- 未修改 XML/MJCF，因此没有验证模型资产变更。
+- 未实现 QP/WBC，因此不能把本轮结果描述为优化式 whole-body control。
+- 旧 fixed-equilibrium whole-body `xyz` 在当前容器环境下仍有 base tail stability failure，需要江浩华决定是否作为本轮阻塞项。
+- 本轮 Docker/Colima 环境是在 macOS 上补齐的等效验收环境，不等同于团队长期 devcontainer，但基础系统和 ROS 版本目标一致：Ubuntu 24.04 + ROS 2 Jazzy。
 
-## 8. 江浩华验收清单
+## 12. 风险与江浩华验收清单
 
-建议江浩华按以下顺序验收。
+风险：
 
-### 8.1 旧模式回归
+- Force-tracking 参数仍是经验调参，尤其是 whole-body base 的 reference displacement、track gain、speed limit。
+- 当前 whole-body base 已通过 100 mm 级 force-tracking 验收，但 150 mm 级 base travel 还不是稳定通过项。
+- Legacy fixed-equilibrium whole-body `xyz` 的 base tail stability 在当前容器运行失败，后续需要单独处理。
+- 多轴 force-tracking 已加入 velocity norm cap，但如果后续提高 force magnitude，需要同步重新验收。
 
-目标：确认默认 fixed-equilibrium 没被破坏。
+建议江浩华验收时逐项检查：
 
-建议执行：
+- 确认默认 `reference_mode` 仍是 `fixed_equilibrium`。
+- 确认新 launch 才显式打开 `force_tracking`。
+- 检查 `ForceTrackingReferenceState` 是否符合“filter/deadband -> velocity -> position -> hold”语义。
+- 复核 `force_reference_vel_norm_max` 是否是合理的多轴安全限幅。
+- 复核本轮生成 CSV/validator/PNG/MP4 是否可打开、可复现。
+- 决定旧 fixed-equilibrium whole-body `xyz` failure 是否阻塞本次提交。
 
-- Zero-force stability
-- Single-arm 1D
-- Single-arm 3D: `y`, `z`, `xyz`
-- Whole-body: `x`, `xyz`
+## 13. 提交前结论
 
-对应命令见 `README_ACCEPTANCE_FEAT.md` 中 fixed-equilibrium 部分。
+本轮 `force_tracking_reference` 第一阶段已经完成代码实现、容器化 ROS 2 Jazzy 构建、pytest/colcon test、force-tracking acceptance，以及真实图片/视频生成。
 
-验收重点：
+当前不建议直接 commit，除非胡子涵和江浩华确认：
 
-- 默认 launch 不显式设置 `reference_mode` 时仍回平衡点。
-- 撤力后 tail segment 无持续振荡。
-- fixed-equilibrium validator 仍打印 `RESULT: PASS`。
-
-### 8.2 Arm force-tracking 新场景
-
-目标：确认 `ee_des_*` 动态参考能在外力作用下移动，并在撤力后保持。
-
-建议执行：
-
-- `force_axis:=x`
-- `force_axis:=y`
-- `force_axis:=z`
-- `force_axis:=xyz`
-
-示例：
-
-```bash
-ros2 launch pr2_mujoco_bridge pr2_arm_force_tracking.launch.py \
-  use_viewer:=false \
-  force_axis:=x \
-  log_file:=/tmp/arm_ft_x.csv
-```
-
-验收重点：
-
-- `ee_des_*` reference peak 达到 100-200 mm 量级。
-- 撤力后 `ee_des_*` tail drift 小。
-- actual EE response 能跟踪 reference。
-- command layer 没有明显高频抖动。
-
-### 8.3 Whole-body force-tracking 新场景
-
-目标：确认 arm 和 base 都有动态参考，且 WBC coordinator 仍是单一汇合点。
-
-建议执行：
-
-- `force_axis:=x`
-- `force_axis:=xyz`
-
-示例：
-
-```bash
-ros2 launch pr2_mujoco_bridge pr2_whole_body_force_tracking.launch.py \
-  use_viewer:=false \
-  force_axis:=xyz \
-  log_file:=/tmp/wb_ft_xyz.csv
-```
-
-验收重点：
-
-- `ee_des_*` 有 held reference。
-- `base_ref_x/y` 有明显位移，目标是 150 mm 量级。
-- actual base pose 有可见响应。
-- `base_ref_*` 撤力后不继续漂移。
-- `pr2_wbc_coordinator` 仍是 arm/base command 的汇合点，没有新增旁路。
-
-### 8.4 新媒体生成建议
-
-当 ROS/devcontainer 可用后，建议生成本轮专属媒体：
-
-```bash
-python3 pr2_ws/src/pr2_mujoco_bridge/scripts/plot_arm_response.py \
-  --csv /tmp/arm_ft_x.csv \
-  --baseline-skip-samples 60 \
-  --save /tmp/arm_ft_x_response.png
-
-python3 pr2_ws/src/pr2_mujoco_bridge/scripts/plot_whole_body_response.py \
-  --csv /tmp/wb_ft_xyz.csv \
-  --baseline-skip-samples 60 \
-  --save /tmp/wb_ft_xyz_response.png
-```
-
-Whole-body 视频可以在生成 `/tmp/wb_ft_xyz.csv` 后，用现有视频渲染脚本或记录回放流程生成，但本轮未在 macOS host 上执行。
-
-## 9. 当前风险
-
-### 9.1 参数需要真实仿真调校
-
-当前实现已通过本地逻辑测试，但 force-to-reference gain、velocity limit、base projection scale 是否刚好达到目标展示幅值，需要在 MuJoCo + ROS 2 中实测。
-
-主要风险：
-
-- arm reference 达到目标，但 actual EE 跟踪不足。
-- base reference 达到 150 mm 量级，但 actual base motion 受模型/控制限制不足。
-- force-tracking 参数过强时可能引入 overshoot 或 tail oscillation。
-
-### 9.2 本轮没有真实 force-tracking acceptance CSV
-
-由于当前 host 缺少 ROS 2 Jazzy 和 Docker daemon，本轮没有生成新的：
-
-- `/tmp/arm_ft_*.csv`
-- `/tmp/wb_ft_*.csv`
-- force-tracking PNG
-- force-tracking MP4
-
-因此提交前若要达到完整验收，应在 ROS/devcontainer 环境中补跑 `README_ACCEPTANCE_FEAT.md` 的 force-tracking 部分。
-
-### 9.3 既有媒体不能替代本轮验收
-
-本报告引用的图片/视频只用于说明既有演示风格和目标视觉效果。它们不能作为本轮 `force_tracking_reference` 功能正确性的证据。
-
-## 10. 提交前结论
-
-本轮代码已经完成第一阶段 `force_tracking_reference` 的工程实现和本地可运行测试覆盖：
-
-- 默认 fixed-equilibrium 行为保留。
-- 新 force-tracking 模式通过独立 launch 启用。
-- arm 和 base 都有动态参考语义。
-- CSV、validator、plot、acceptance 文档已支持审阅和复现。
-
-但提交前仍建议由江浩华在 ROS 2 Jazzy/devcontainer 环境中完成最终验收，尤其是：
-
-- 旧 fixed-equilibrium acceptance 回归。
-- 新 arm force-tracking `x/y/z/xyz`。
-- 新 whole-body force-tracking `x/xyz`。
-- 新 PNG/MP4 生成和人工视觉审阅。
-
+- 接受本轮 force-tracking 100 mm 级验收结果。
+- 接受 150 mm 级 base motion 作为后续调参目标。
+- 接受旧 fixed-equilibrium whole-body `xyz` tail stability failure 作为单独风险，不阻塞本轮 force-tracking 提交。

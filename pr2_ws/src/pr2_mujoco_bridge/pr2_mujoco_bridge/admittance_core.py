@@ -180,6 +180,7 @@ class ForceTrackingReferenceState:
         max_velocity: np.ndarray,
         max_displacement: np.ndarray,
         idle_velocity_decay: float,
+        max_velocity_norm: float | None = None,
         velocity_epsilon: float = 1.0e-5,
     ) -> "ForceTrackingReferenceState":
         alpha = float(np.clip(filter_alpha, 0.0, 1.0))
@@ -190,6 +191,8 @@ class ForceTrackingReferenceState:
         if active:
             velocity = active_force * _as_array(force_to_velocity_gain)
             velocity = np.clip(velocity, -_as_array(max_velocity), _as_array(max_velocity))
+            if max_velocity_norm is not None:
+                velocity = clip_norm(velocity, float(max_velocity_norm))
         else:
             decay = float(np.clip(idle_velocity_decay, 0.0, 1.0))
             velocity = self.velocity * decay

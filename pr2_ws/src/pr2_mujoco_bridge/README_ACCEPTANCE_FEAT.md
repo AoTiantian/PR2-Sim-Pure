@@ -296,7 +296,9 @@ python3 $VALIDATOR \
 
 Expected:
 - The arm and mobile base both publish held dynamic references.
-- The base XY reference is visibly displaced, targeting the 150 mm class.
+- The base XY reference is visibly displaced in the 100 mm class.  Larger
+  150 mm-class base travel remains a tuning target, not a current pass
+  criterion for this first force-tracking slice.
 - The existing WBC coordinator remains the only whole-body merge point.
 
 ## Logs And Artifacts
@@ -329,6 +331,11 @@ The committed reference video, CSV, and polished figures are under
 `render_pr2_whole_body_video.py` with a fixed close camera so mobile-base motion
 is visible.  `plot_whole_body_response.py` creates the compact whole-body
 force/arm/base summary figure from the same CSV.
+
+The current `force_tracking_reference` acceptance evidence is under
+`docs/force_tracking_reference_acceptance/`.  It contains generated CSV logs,
+validator outputs, response plots, and the rendered whole-body force-tracking
+MP4 from the ROS 2 Jazzy container run.
 
 ## Recommended Order
 

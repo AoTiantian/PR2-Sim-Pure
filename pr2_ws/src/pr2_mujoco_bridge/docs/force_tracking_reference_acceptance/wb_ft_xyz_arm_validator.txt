@@ -1,0 +1,12 @@
+EE metrics:
+  x: peak=98.173 mm, final=98.173 mm, tail_std=4.375 mm, tail_drift=14.697 mm, sign_changes=0
+  y: peak=103.893 mm, final=103.893 mm, tail_std=0.928 mm, tail_drift=2.706 mm, sign_changes=0
+  z: peak=101.063 mm, final=101.063 mm, tail_std=2.626 mm, tail_drift=9.198 mm, sign_changes=0
+Base metrics:
+  linear: peak=95.448 mm, tail_std=2.907 mm, tail_drift=8.516 mm, sign_changes=0
+  yaw: peak=0.063 deg, tail_std=0.0106 deg, tail_drift=0.0048 deg, sign_changes=4
+Force-tracking metrics:
+  x: ref_peak=105.092 mm, actual_peak=98.173 mm, track_error=68.522 mm, ref_tail_std=0.000 mm, ref_tail_drift=0.000 mm
+  y: ref_peak=105.091 mm, actual_peak=103.893 mm, track_error=37.673 mm, ref_tail_std=0.000 mm, ref_tail_drift=0.000 mm
+  z: ref_peak=104.986 mm, actual_peak=101.063 mm, track_error=54.368 mm, ref_tail_std=0.000 mm, ref_tail_drift=0.000 mm
+RESULT: PASS

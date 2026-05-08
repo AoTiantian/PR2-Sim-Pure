@@ -1,0 +1,17 @@
+{
+  "out": "/workspace/pr2_ws/src/pr2_mujoco_bridge/docs/force_tracking_reference_acceptance/wb_ft_xyz_force_tracking.mp4",
+  "frames": 224,
+  "duration_s": 7.466666666666667,
+  "trim_indices": [
+    0,
+    223
+  ],
+  "metrics": {
+    "onset": 1.009876012802124,
+    "release": 4.000009059906006,
+    "ee_peak_mm": 104.61999999999999,
+    "base_peak_mm": 94.67099999999995,
+    "base_yaw_peak_deg": 0.15429753422873393,
+    "duration_s": 8.99090313911438
+  }
+}

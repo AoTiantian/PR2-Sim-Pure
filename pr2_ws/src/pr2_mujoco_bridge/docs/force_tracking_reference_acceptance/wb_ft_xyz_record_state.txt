@@ -1,0 +1,7 @@
+[INFO] [1778249485.516170141] [pr2_whole_body_state_recorder]: recording whole-body state to /workspace/pr2_ws/src/pr2_mujoco_bridge/docs/force_tracking_reference_acceptance/wb_ft_xyz_state.npz at 30.0 Hz
+{
+  "samples": 266,
+  "duration_s": 8.945722682999985,
+  "joint_count": 40,
+  "out": "/workspace/pr2_ws/src/pr2_mujoco_bridge/docs/force_tracking_reference_acceptance/wb_ft_xyz_state.npz"
+}

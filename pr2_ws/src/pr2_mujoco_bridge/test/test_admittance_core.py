@@ -269,3 +269,26 @@ def test_force_tracking_reference_clips_velocity_and_reference() -> None:
     assert state.velocity[0] <= 0.06
     assert state.velocity[1] <= 0.08
     np.testing.assert_allclose(state.reference, np.array([0.10, 0.12]), atol=1.0e-9)
+
+
+def test_force_tracking_reference_can_clip_velocity_norm() -> None:
+    state = ForceTrackingReferenceState.zeros(dim=3)
+
+    state = state.step(
+        force=np.array([100.0, 100.0, 100.0], dtype=np.float64),
+        dt=0.02,
+        force_deadband=np.zeros(3, dtype=np.float64),
+        filter_alpha=1.0,
+        force_to_velocity_gain=np.ones(3, dtype=np.float64),
+        max_velocity=np.array([0.08, 0.08, 0.08], dtype=np.float64),
+        max_displacement=np.array([0.20, 0.20, 0.20], dtype=np.float64),
+        idle_velocity_decay=0.9,
+        max_velocity_norm=0.08,
+    )
+
+    assert np.linalg.norm(state.velocity) <= 0.0800001
+    np.testing.assert_allclose(
+        state.velocity,
+        np.full(3, 0.08 / np.sqrt(3.0), dtype=np.float64),
+        atol=1.0e-9,
+    )
