@@ -8,7 +8,8 @@ PR2 MuJoCo ↔ ROS 2 桥接节点（Jazzy）。
   发布: /joint_states (sensor_msgs/JointState)
         /odom (nav_msgs/Odometry)，frame: odom -> base_link
   订阅: /joint_commands (sensor_msgs/JointState)
-          按关节名写入控制量：position→位置执行器，velocity→轮速执行器，effort→力矩电机
+          按关节名写入控制量：position→位置执行器，velocity→轮速执行器，effort→力矩电机；
+          左臂 *_tau 电机：JointState.velocity 为速度参考，由仿真内 CTC 换算为力矩（见参数 ctc_*）
         /actuator_command (std_msgs/Float64MultiArray)
           长度须等于 model.nu，直接写入 MuJoCo ctrl（与旧脚本等价）
         /cmd_vel (geometry_msgs/Twist)，默认覆盖底盘转向(5–8)与轮速(9–16)，近似全向+自转
@@ -146,6 +147,10 @@ class Pr2MujocoSim(Node):
         self.declare_parameter("cmd_vel_dir_hold_vplanar_min", 0.05)
         self.declare_parameter("cmd_vel_dir_lpf_alpha", 0.25)
         self.declare_parameter("cmd_vel_steer_target_lpf_alpha", 0.35)
+        # Left arm: computed torque (velocity ref in JointState.velocity -> motor torques).
+        self.declare_parameter("ctc_enable", True)
+        self.declare_parameter("ctc_kp", 100.0)
+        self.declare_parameter("ctc_kd", 20.0)
 
         model_path = (
             self.get_parameter("model_path").get_parameter_value().string_value
@@ -263,6 +268,15 @@ class Pr2MujocoSim(Node):
         self._cmd_vel_steer_target_lpf_alpha = float(
             max(0.0, min(1.0, self._cmd_vel_steer_target_lpf_alpha))
         )
+        self._ctc_enable = bool(
+            self.get_parameter("ctc_enable").get_parameter_value().bool_value
+        )
+        self._ctc_kp = float(
+            self.get_parameter("ctc_kp").get_parameter_value().double_value
+        )
+        self._ctc_kd = float(
+            self.get_parameter("ctc_kd").get_parameter_value().double_value
+        )
         self._cmd_vel_vx_f = 0.0
         self._cmd_vel_vy_f = 0.0
         self._last_steer_target = None
@@ -299,6 +313,49 @@ class Pr2MujocoSim(Node):
             kind = _classify_actuator(an or "")
             if jn:
                 self._joint_to_act.setdefault(jn, []).append((a, kind))
+
+        # Left-arm CTC: velocity reference on /joint_commands -> motor torques (see robot_pr2.xml motors).
+        self._CTC_ARM_JOINTS: Tuple[str, ...] = (
+            "l_shoulder_pan_joint",
+            "l_shoulder_lift_joint",
+            "l_upper_arm_roll_joint",
+            "l_elbow_flex_joint",
+            "l_forearm_roll_joint",
+            "l_wrist_flex_joint",
+            "l_wrist_roll_joint",
+        )
+        self._ctc_vel_ref: Dict[str, float] = {jn: 0.0 for jn in self._CTC_ARM_JOINTS}
+        self._ctc_joint_set = frozenset(self._CTC_ARM_JOINTS)
+        self._ctc_vadr: List[int] = []
+        self._ctc_qadr: List[int] = []
+        self._ctc_act_ids: List[int] = []
+        self._ctc_M_buf = np.zeros((self._model.nv, self._model.nv), dtype=np.float64)
+        self._ctc_q_ref = np.zeros(7, dtype=np.float64)
+        self._ctc_qdot_r_prev = np.zeros(7, dtype=np.float64)
+        self._ctc_vel_prev_inited = False
+        _ctc_missing: List[str] = []
+        for jn in self._CTC_ARM_JOINTS:
+            jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jn)
+            if jid < 0:
+                _ctc_missing.append(jn)
+                continue
+            self._ctc_qadr.append(int(self._model.jnt_qposadr[jid]))
+            self._ctc_vadr.append(int(self._model.jnt_dofadr[jid]))
+            aname = jn.replace("_joint", "_tau")
+            aid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname)
+            if aid < 0:
+                _ctc_missing.append(aname)
+                continue
+            self._ctc_act_ids.append(int(aid))
+        if len(self._ctc_act_ids) != 7:
+            self.get_logger().warn(
+                "CTC 左臂未完整配置（需要 7 个 *_tau 执行器），已禁用 CTC。"
+                f" missing={_ctc_missing}"
+            )
+            self._ctc_enable = False
+            self._ctc_act_ids = []
+            self._ctc_vadr = []
+            self._ctc_qadr = []
 
         # 躯干执行器：torso_lift_tau
         self._torso_act_id: int | None = None
@@ -503,6 +560,122 @@ class Pr2MujocoSim(Node):
                 out.append(i)
         return out
 
+    def _ctc_sync_reference_from_state(self) -> None:
+        """Align CTC reference position with current q (after mj_forward / reset)."""
+        if not self._ctc_enable or len(self._ctc_qadr) != 7:
+            self._ctc_vel_prev_inited = False
+            return
+        for i, qadr in enumerate(self._ctc_qadr):
+            self._ctc_q_ref[i] = float(self._data.qpos[qadr])
+        self._ctc_qdot_r_prev[:] = 0.0
+        self._ctc_vel_prev_inited = False
+
+    def _apply_ctc_torques(self, ctrl: np.ndarray, *, active: bool) -> None:
+        """Left arm motors: CTC τ = M(q̈_r + kdė + kpe) + h, or legacy τ = kv(q̇_r − q̇) if ctc_enable false."""
+        if not active or len(self._ctc_act_ids) != 7:
+            return
+        dt = float(self._model.opt.timestep)
+        if not (dt > 0.0 and math.isfinite(dt)):
+            return
+        with self._lock:
+            qdot_r = np.array(
+                [float(self._ctc_vel_ref[jn]) for jn in self._CTC_ARM_JOINTS],
+                dtype=np.float64,
+            )
+        qdot = np.array(
+            [float(self._data.qvel[vadr]) for vadr in self._ctc_vadr],
+            dtype=np.float64,
+        )
+
+        if not self._ctc_enable:
+            # Match former <velocity> actuator gains (robot_pr2.xml before motor switch).
+            kv = np.array([35.0, 120.0, 8.0, 70.0, 30.0, 8.0, 20.0], dtype=np.float64)
+            tau = kv * (qdot_r - qdot)
+            for i, aid in enumerate(self._ctc_act_ids):
+                lo = float(self._model.actuator_ctrlrange[aid, 0])
+                hi = float(self._model.actuator_ctrlrange[aid, 1])
+                ctrl[aid] = float(np.clip(tau[i], lo, hi))
+            return
+
+        # qddot_r (inertia feedforward via finite-diff) is intentionally disabled.
+        # The QP outer loop runs at ~50 Hz while MuJoCo steps at 500 Hz, so any
+        # step change in qdot_r produces qddot_r = Δqdot / 0.002 s → 500× amplified
+        # torque spikes that violently destabilise the arm.  h_arm already feeds
+        # forward gravity/Coriolis; the PD terms handle velocity tracking.
+        qddot_r = np.zeros(7, dtype=np.float64)
+
+        self._ctc_q_ref += qdot_r * dt
+
+        q = np.array(
+            [float(self._data.qpos[qadr]) for qadr in self._ctc_qadr],
+            dtype=np.float64,
+        )
+        e = self._ctc_q_ref - q
+        e_dot = qdot_r - qdot
+
+        mujoco.mj_forward(self._model, self._data)
+        mujoco.mj_fullM(self._model, self._ctc_M_buf, self._data.qM)
+        v_ix = np.asarray(self._ctc_vadr, dtype=np.int32)
+        M_arm = self._ctc_M_buf[np.ix_(v_ix, v_ix)]
+        h_arm = np.array(
+            [float(self._data.qfrc_bias[int(v)]) + float(self._data.qfrc_passive[int(v)]) for v in self._ctc_vadr],
+            dtype=np.float64,
+        )
+        kp = float(self._ctc_kp)
+        kd = float(self._ctc_kd)
+        tau = M_arm @ (kd * e_dot + kp * e) + h_arm
+
+        # #region agent log
+        _now_ms = int(time.time() * 1000)
+        if not hasattr(self, "_ctc_dbg_last_ms"):
+            self._ctc_dbg_last_ms = 0
+        if _now_ms - self._ctc_dbg_last_ms >= 200:  # log at 5Hz
+            self._ctc_dbg_last_ms = _now_ms
+            import json as _json
+            # Check torque clipping for all joints
+            tau_clipped = []
+            for i, aid in enumerate(self._ctc_act_ids):
+                lo = float(self._model.actuator_ctrlrange[aid, 0])
+                hi = float(self._model.actuator_ctrlrange[aid, 1])
+                tau_clipped.append(float(np.clip(tau[i], lo, hi)))
+            saturated = [abs(float(tau[i]) - float(tau_clipped[i])) > 0.1 for i in range(len(tau))]
+            # Tracking ratio: qdot / qdot_r (when qdot_r is non-trivial)
+            track_ratio = [float(qdot[i]) / float(qdot_r[i]) if abs(float(qdot_r[i])) > 0.005 else float("nan")
+                           for i in range(len(qdot_r))]
+            _payload = {
+                "sessionId": "a24b67", "runId": "wbc_tracking",
+                "hypothesisId": "H_WBCTracking",
+                "location": "pr2_sim_ros.py:_apply_ctc_torques",
+                "message": "CTC tracking all joints",
+                "data": {
+                    "qdot_r": [float(x) for x in qdot_r],
+                    "qdot": [float(x) for x in qdot],
+                    "track_ratio": track_ratio,
+                    "tau_computed": [float(x) for x in tau],
+                    "tau_clipped": tau_clipped,
+                    "any_saturated": any(saturated),
+                    "saturated": saturated,
+                    "e_dot": [float(x) for x in e_dot],
+                    "h_arm": [float(x) for x in h_arm],
+                    "kp": kp, "kd": kd,
+                },
+                "timestamp": _now_ms,
+            }
+            try:
+                with open("/workspace/.cursor/debug-a24b67.log", "a") as _f:
+                    _f.write(_json.dumps(_payload) + "\n")
+            except Exception:
+                pass
+        # #endregion agent log
+
+        for i, aid in enumerate(self._ctc_act_ids):
+            lo = float(self._model.actuator_ctrlrange[aid, 0])
+            hi = float(self._model.actuator_ctrlrange[aid, 1])
+            ctrl[aid] = float(np.clip(tau[i], lo, hi))
+
+        self._ctc_qdot_r_prev[:] = qdot_r
+        self._ctc_vel_prev_inited = True
+
     def _cb_joint_commands(self, msg: JointState) -> None:
         with self._lock:
             if self._full_actuator_override:
@@ -517,6 +690,15 @@ class Pr2MujocoSim(Node):
                         v = msg.velocity[i]
                         if not math.isnan(v):
                             self._ctrl_target[aid] = float(v)
+                    elif kind == "effort" and jn in self._ctc_joint_set:
+                        if i < len(msg.velocity):
+                            v = msg.velocity[i]
+                            if not math.isnan(v):
+                                self._ctc_vel_ref[jn] = float(v)
+                        elif i < len(msg.effort) and not self._ctc_enable:
+                            v = msg.effort[i]
+                            if not math.isnan(v):
+                                self._ctrl_target[aid] = float(v)
                     elif kind == "effort" and i < len(msg.effort):
                         v = msg.effort[i]
                         if not math.isnan(v):
@@ -1023,6 +1205,7 @@ class Pr2MujocoSim(Node):
                     self._data.qpos[int(self._model.jnt_qposadr[jid])] = float(angle)
             mujoco.mj_forward(self._model, self._data)
             self.get_logger().info("initial_qpos_json 已应用到 MuJoCo 初始状态")
+            self._ctc_sync_reference_from_state()
         else:
             # #region agent log
             self._dbg_write(
@@ -1031,7 +1214,8 @@ class Pr2MujocoSim(Node):
                 {},
             )
             # #endregion agent log
-
+            mujoco.mj_forward(self._model, self._data)
+            self._ctc_sync_reference_from_state()
         self._base_lock_qpos = None
         self._base_lock_pending = bool(
             self._lock_base_motion and self._base_free_qadr is not None
@@ -1077,6 +1261,8 @@ class Pr2MujocoSim(Node):
                 if self._torso_act_id is not None:
                     ctrl[self._torso_act_id] = self._torso_hold
             self._apply_cmd_vel_to_ctrl(ctrl)
+            ctc_active = (not override) and (not self._demo_motion) and (len(self._ctc_act_ids) == 7)
+            self._apply_ctc_torques(ctrl, active=ctc_active)
 
             self._data.ctrl[:] = ctrl
             if not self._pause_sim:
@@ -1152,6 +1338,21 @@ class Pr2MujocoSim(Node):
                             except Exception:
                                 fr = None
                             break
+                    if vcmd is None and jn in self._ctc_joint_set:
+                        with self._lock:
+                            vcmd = float(self._ctc_vel_ref.get(jn, 0.0))
+                        if fr is None:
+                            for aid, kind in self._joint_to_act.get(jn, []):
+                                if kind == "effort":
+                                    try:
+                                        fr = [
+                                            float(self._model.actuator_forcerange[aid][0]),
+                                            float(self._model.actuator_forcerange[aid][1]),
+                                        ]
+                                    except Exception:
+                                        cr = self._model.actuator_ctrlrange[aid]
+                                        fr = [float(cr[0]), float(cr[1])]
+                                    break
                     act = float(self._data.qfrc_actuator[vadr])
                     qcon = float(self._data.qfrc_constraint[vadr])
                     act_abs = float(abs(act))

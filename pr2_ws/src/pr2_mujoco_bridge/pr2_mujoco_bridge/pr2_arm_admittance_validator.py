@@ -50,6 +50,9 @@ class Pr2ArmAdmittanceValidator(Node):
         self.declare_parameter("force_x", 30.0)
         self.declare_parameter("force_y", 0.0)
         self.declare_parameter("force_z", 0.0)
+        self.declare_parameter("torque_x", 0.0)
+        self.declare_parameter("torque_y", 0.0)
+        self.declare_parameter("torque_z", 0.0)
         self.declare_parameter("force_start_sec", 2.0)
         self.declare_parameter("duration_sec", 6.0)
         self.declare_parameter("settle_after_sec", 3.0)
@@ -95,6 +98,9 @@ class Pr2ArmAdmittanceValidator(Node):
         self._fx = float(self.get_parameter("force_x").value)
         self._fy = float(self.get_parameter("force_y").value)
         self._fz = float(self.get_parameter("force_z").value)
+        self._tx = float(self.get_parameter("torque_x").value)
+        self._ty = float(self.get_parameter("torque_y").value)
+        self._tz = float(self.get_parameter("torque_z").value)
         self._t_on = float(self.get_parameter("force_start_sec").value)
         duration = float(self.get_parameter("duration_sec").value)
         settle_after = float(self.get_parameter("settle_after_sec").value)
@@ -314,13 +320,24 @@ class Pr2ArmAdmittanceValidator(Node):
             self._eff_sq_sum += sample_peak * sample_peak
             self._eff_count += 1
 
-    def _publish_wrench(self, fx: float, fy: float, fz: float) -> None:
+    def _publish_wrench(
+        self,
+        fx: float,
+        fy: float,
+        fz: float,
+        tx: float = 0.0,
+        ty: float = 0.0,
+        tz: float = 0.0,
+    ) -> None:
         msg = WrenchStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self._frame_id
         msg.wrench.force.x = fx
         msg.wrench.force.y = fy
         msg.wrench.force.z = fz
+        msg.wrench.torque.x = tx
+        msg.wrench.torque.y = ty
+        msg.wrench.torque.z = tz
         self._pub_wrench.publish(msg)
 
         # #region agent log
@@ -351,7 +368,10 @@ class Pr2ArmAdmittanceValidator(Node):
             return
         t = self._elapsed()
         fx, fy, fz = self._active_force(t)
-        self._publish_wrench(fx, fy, fz)
+        if self._use_schedule:
+            self._publish_wrench(fx, fy, fz)
+        else:
+            self._publish_wrench(fx, fy, fz, self._tx, self._ty, self._tz)
         if t < self._t_total:
             return
 

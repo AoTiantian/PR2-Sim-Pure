@@ -417,14 +417,14 @@
     <motor name="r_wrist_flex_tau"     joint="r_wrist_flex_joint" gear="1" ctrllimited="true" ctrlrange="-30 30"/>
     <motor name="r_wrist_roll_tau"     joint="r_wrist_roll_joint" gear="1" ctrllimited="true" ctrlrange="-10 10"/>
 
-    <!-- Left arm: switch to velocity actuators (pure velocity-bottom mode). -->
-    <velocity name="l_shoulder_pan_vel"   joint="l_shoulder_pan_joint"   kv="35" ctrllimited="true" ctrlrange="-8 8" forcerange="-30 30"/>
-    <velocity name="l_shoulder_lift_vel"  joint="l_shoulder_lift_joint"  kv="120" ctrllimited="true" ctrlrange="-8 8" forcerange="-800 800"/>
-    <velocity name="l_upper_arm_roll_vel" joint="l_upper_arm_roll_joint" kv="8" ctrllimited="true" ctrlrange="-10 10" forcerange="-100 100"/>
-    <velocity name="l_elbow_flex_vel"     joint="l_elbow_flex_joint"     kv="70" ctrllimited="true" ctrlrange="-8 8" forcerange="-600 600"/>
-    <velocity name="l_forearm_roll_vel"   joint="l_forearm_roll_joint"   kv="30" ctrllimited="true" ctrlrange="-12 12" forcerange="-150 150"/>
-    <velocity name="l_wrist_flex_vel"     joint="l_wrist_flex_joint"     kv="8" ctrllimited="true" ctrlrange="-10 10" forcerange="-300 300"/>
-    <velocity name="l_wrist_roll_vel"     joint="l_wrist_roll_joint"     kv="20" ctrllimited="true" ctrlrange="-12 12" forcerange="-80 80"/>
+    <!-- Left arm: motor actuators; pr2_sim_ros applies CTC (velocity ref -> torque). -->
+    <motor name="l_shoulder_pan_tau"   joint="l_shoulder_pan_joint"   gear="1" ctrllimited="true" ctrlrange="-30 30"/>
+    <motor name="l_shoulder_lift_tau"  joint="l_shoulder_lift_joint"  gear="1" ctrllimited="true" ctrlrange="-800 800"/>
+    <motor name="l_upper_arm_roll_tau" joint="l_upper_arm_roll_joint" gear="1" ctrllimited="true" ctrlrange="-100 100"/>
+    <motor name="l_elbow_flex_tau"     joint="l_elbow_flex_joint"     gear="1" ctrllimited="true" ctrlrange="-600 600"/>
+    <motor name="l_forearm_roll_tau"   joint="l_forearm_roll_joint"   gear="1" ctrllimited="true" ctrlrange="-150 150"/>
+    <motor name="l_wrist_flex_tau"     joint="l_wrist_flex_joint"     gear="1" ctrllimited="true" ctrlrange="-300 300"/>
+    <motor name="l_wrist_roll_tau"     joint="l_wrist_roll_joint"     gear="1" ctrllimited="true" ctrlrange="-80 80"/>
   </actuator>
 
   <sensor>

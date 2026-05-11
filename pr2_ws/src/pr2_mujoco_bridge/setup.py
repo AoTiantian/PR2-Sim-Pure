@@ -23,7 +23,7 @@ setup(
             ],
         ),
     ],
-    install_requires=["setuptools", "numpy", "osqp"],
+    install_requires=["setuptools", "numpy", "osqp", "matplotlib"],
     zip_safe=True,
     maintainer="user",
     maintainer_email="maintainer@example.com",

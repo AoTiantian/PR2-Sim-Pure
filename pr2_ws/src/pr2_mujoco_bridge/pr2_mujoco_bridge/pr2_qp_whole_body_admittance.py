@@ -95,7 +95,7 @@ class Pr2QpWholeBodyAdmittance(Node):
         super().__init__("pr2_qp_whole_body_admittance")
 
         # #region agent log
-        self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._dbg_log_path = "/workspace/.cursor/debug-a24b67.log"
         self._dbg_last_mono = 0.0
         self._dbg_prev_wrench_active: Optional[bool] = None
         self._dbg_last_cmdvel_mono = 0.0
@@ -105,7 +105,7 @@ class Pr2QpWholeBodyAdmittance(Node):
                 import json as _json
 
                 payload = {
-                    "sessionId": "33df0d",
+                    "sessionId": "a24b67",
                     "runId": os.environ.get("DEBUG_RUN_ID", "qp_whole_body"),
                     "hypothesisId": hypothesis_id,
                     "location": "pr2_qp_whole_body_admittance.py",
@@ -155,6 +155,7 @@ class Pr2QpWholeBodyAdmittance(Node):
         self.declare_parameter("damping_linear", [320.0, 320.0, 400.0])
         self.declare_parameter("stiffness_linear", [260.0, 260.0, 320.0])
         self.declare_parameter("force_deadzone", [0.8, 0.8, 0.8])
+        self.declare_parameter("force_despring_thresh", [20.0, 20.0, 30.0])
         # NOTE: z-hold typically needs more authority against gravity than x/y.
         self.declare_parameter("max_linear_velocity", [0.25, 0.25, 0.8])
 
@@ -163,6 +164,12 @@ class Pr2QpWholeBodyAdmittance(Node):
         # the same admittance form (F term simply becomes zero).
         self.declare_parameter("hold_damping_linear", [320.0, 320.0, 180.0])
         self.declare_parameter("hold_stiffness_linear", [260.0, 260.0, 1200.0])
+
+        # Virtual mass for second-order admittance: M dv/dt + B v = F - K dx (per axis).
+        self.declare_parameter("mass_linear", [5.0, 5.0, 5.0])
+        self.declare_parameter("mass_angular", [0.5, 0.5, 0.5])
+        # If true, zero integrated admittance velocity when wrench becomes inactive (no coast-down).
+        self.declare_parameter("reset_admittance_velocity_on_wrench_drop", False)
 
         self.declare_parameter("freeze_orientation", True)
         self.declare_parameter("damping_angular", [24.0, 24.0, 18.0])
@@ -215,6 +222,7 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._b_lin_hold = np.array(list(self.get_parameter("hold_damping_linear").value), dtype=np.float64)
         self._k_lin_hold = np.array(list(self.get_parameter("hold_stiffness_linear").value), dtype=np.float64)
         self._dz_f = np.array(list(self.get_parameter("force_deadzone").value), dtype=np.float64)
+        self._despring_thresh = np.array(list(self.get_parameter("force_despring_thresh").value), dtype=np.float64)
         self._vmax_lin = np.array(list(self.get_parameter("max_linear_velocity").value), dtype=np.float64)
 
         self._freeze_ori = bool(self.get_parameter("freeze_orientation").value)
@@ -222,6 +230,13 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._k_ang = np.array(list(self.get_parameter("stiffness_angular").value), dtype=np.float64)
         self._dz_t = np.array(list(self.get_parameter("torque_deadzone").value), dtype=np.float64)
         self._vmax_ang = np.array(list(self.get_parameter("max_angular_velocity").value), dtype=np.float64)
+
+        self._m_lin = np.array(list(self.get_parameter("mass_linear").value), dtype=np.float64)
+        self._m_ang = np.array(list(self.get_parameter("mass_angular").value), dtype=np.float64)
+        self._reset_adm_vel_on_wrench_drop = bool(
+            self.get_parameter("reset_admittance_velocity_on_wrench_drop").value
+        )
+        self._v_adm = np.zeros(6, dtype=np.float64)
 
         self._act_force_norm = float(self.get_parameter("wrench_activate_force_norm").value)
         self._act_torque_norm = float(self.get_parameter("wrench_activate_torque_norm").value)
@@ -389,11 +404,24 @@ class Pr2QpWholeBodyAdmittance(Node):
                 wrench_rotated = True
             except Exception:
                 wrench_rotated = False
-        self._wrench_filtered = self._alpha * wr_raw + (1.0 - self._alpha) * self._wrench_filtered
+
+        # Decide "active/inactive" based on the *raw* wrench message (after frame rotation).
+        # Rationale: We still low-pass filter the wrench for smooth v_des, but we want the
+        # inactive edge (force removed) to be immediate, to avoid post-release drift caused by
+        # filter residual.
+        f_raw = wr_raw[:3]
+        t_raw = wr_raw[3:]
+        wrench_is_active = (np.linalg.norm(f_raw) >= self._act_force_norm) or (np.linalg.norm(t_raw) >= self._act_torque_norm)
+
+        # LPF update. When wrench is inactive, hard-reset filter to raw (typically zeros) to
+        # eliminate residual force.
+        if not bool(wrench_is_active):
+            self._wrench_filtered = wr_raw.copy()
+        else:
+            self._wrench_filtered = self._alpha * wr_raw + (1.0 - self._alpha) * self._wrench_filtered
 
         f = self._wrench_filtered[:3]
         t = self._wrench_filtered[3:]
-        wrench_is_active = (np.linalg.norm(f) >= self._act_force_norm) or (np.linalg.norm(t) >= self._act_torque_norm)
 
         # #region agent log
         prev_active = self._dbg_prev_wrench_active
@@ -449,8 +477,9 @@ class Pr2QpWholeBodyAdmittance(Node):
         # #endregion agent log
 
         # Always latch a reference pose the first time we can.
-        # This enables "hold even with no wrench": v_des = -B^{-1} K dx when F=0,
-        # and the wrench term adds on top when present.
+        # With stiffness K>0: hold uses v from M dv/dt + B v = -K dx when F=0.
+        # With K=0 and mass-damper: v decays via M dv/dt + B v = 0 when F=0.
+        prev_wrench_was_active = bool(self._latch.wrench_was_active)
         if (not self._latch.latched) or (self._latch.base_pose is None):
             self._latch.base_pose = self._latest_pose
             self._latch.latched = True
@@ -458,6 +487,15 @@ class Pr2QpWholeBodyAdmittance(Node):
                 "H1_LatchAndTopics",
                 "latched base pose",
                 {"ros_t": float(self.get_clock().now().nanoseconds * 1e-9), "reason": "initial_latch"},
+            )
+        elif prev_wrench_was_active and (not bool(wrench_is_active)):
+            self._latch.base_pose = self._latest_pose
+            if self._reset_adm_vel_on_wrench_drop:
+                self._v_adm[:] = 0.0
+            self._dbg_write(
+                "H1_LatchAndTopics",
+                "updated base pose on wrench drop",
+                {"ros_t": float(self.get_clock().now().nanoseconds * 1e-9), "reason": "wrench_drop_latch"},
             )
         self._latch.wrench_was_active = bool(wrench_is_active)
 
@@ -493,7 +531,8 @@ class Pr2QpWholeBodyAdmittance(Node):
             w[i] = _apply_deadzone(float(w[i]), float(self._dz_f[i]))
             w[3 + i] = _apply_deadzone(float(w[3 + i]), float(self._dz_t[i]))
 
-        # Admittance: v_des = B^{-1}(F - K dx)
+        # Admittance (mass-damper): M dv/dt + B v = F - K dx  =>  v += dt * (F - K dx - B v) / M
+        dt = float(self._dt)
         v_des = np.zeros(6, dtype=np.float64)
         v_des_raw = np.zeros(6, dtype=np.float64)
         v_sat_lin = [False, False, False]
@@ -509,17 +548,29 @@ class Pr2QpWholeBodyAdmittance(Node):
             if abs(float(w[i])) <= 1e-9:
                 b_lin[i] = self._b_lin_hold[i]
                 k_lin[i] = self._k_lin_hold[i]
+            elif abs(float(self._wrench_filtered[i])) >= float(self._despring_thresh[i]):
+                k_lin[i] = 0.0
         for i in range(3):
+            m = max(float(self._m_lin[i]), 1e-6)
             b = max(float(b_lin[i]), 1e-6)
-            v_des_raw[i] = (w[i] - float(k_lin[i]) * float(dx_lin[i])) / b
+            f_net = float(w[i]) - float(k_lin[i]) * float(dx_lin[i])
+            self._v_adm[i] += dt * (f_net - b * self._v_adm[i]) / m
+            v_des_raw[i] = self._v_adm[i]
             v_des[i] = _clamp(float(v_des_raw[i]), -float(self._vmax_lin[i]), float(self._vmax_lin[i]))
+            self._v_adm[i] = float(v_des[i])
             v_sat_lin[i] = bool(abs(float(v_des_raw[i])) > float(self._vmax_lin[i]) + 1e-12)
-        if not self._freeze_ori:
+        if self._freeze_ori:
+            self._v_adm[3:6] = 0.0
+        else:
             v_sat_ang = [False, False, False]
             for i in range(3):
+                m = max(float(self._m_ang[i]), 1e-6)
                 b = max(float(self._b_ang[i]), 1e-6)
-                v_des_raw[3 + i] = (w[3 + i] - float(self._k_ang[i]) * float(dx_ang[i])) / b
+                f_net = float(w[3 + i]) - float(self._k_ang[i]) * float(dx_ang[i])
+                self._v_adm[3 + i] += dt * (f_net - b * self._v_adm[3 + i]) / m
+                v_des_raw[3 + i] = self._v_adm[3 + i]
                 v_des[3 + i] = _clamp(float(v_des_raw[3 + i]), -float(self._vmax_ang[i]), float(self._vmax_ang[i]))
+                self._v_adm[3 + i] = float(v_des[3 + i])
                 v_sat_ang[i] = bool(abs(float(v_des_raw[3 + i])) > float(self._vmax_ang[i]) + 1e-12)
 
         # #region agent log
@@ -565,6 +616,43 @@ class Pr2QpWholeBodyAdmittance(Node):
         if freeze_base_no_wrench and (not wrench_is_active):
             umin[7:] = 0.0
             umax[7:] = 0.0
+
+        # #region agent log
+        # Root-cause logs for "torque-only causes translation drift / jump".
+        # Goal: determine whether drift is from (a) v_des linear generated by hold gains,
+        # (b) base motion participation, or (c) latch update edges.
+        try:
+            import numpy as _np
+            now_m = time.monotonic()
+            f_raw_n = float(_np.linalg.norm(f_raw))
+            t_raw_n = float(_np.linalg.norm(t_raw))
+            # Log only when torque is present, and throttle.
+            if (t_raw_n >= float(self._act_torque_norm)) and (now_m - self._dbg_last_mono > 0.20):
+                self._dbg_last_mono = now_m
+                # Solve preview quantities already available here.
+                self._dbg_write(
+                    "H_TorqueOnlyDrift",
+                    "torque-only debug snapshot",
+                    {
+                        "wrench_active": bool(wrench_is_active),
+                        "f_raw_norm": f_raw_n,
+                        "t_raw_norm": t_raw_n,
+                        "w_raw": [float(x) for x in wr_raw],
+                        "w_filt": [float(x) for x in self._wrench_filtered],
+                        "dx_lin": [float(x) for x in dx_lin],
+                        "dx_ang": [float(x) for x in dx_ang],
+                        "k_lin": [float(x) for x in k_lin],
+                        "b_lin": [float(x) for x in b_lin],
+                        "v_des": [float(x) for x in v_des],
+                        "freeze_base_no_wrench": bool(freeze_base_no_wrench),
+                        "base_box_is_zero": bool(abs(float(umin[7])) < 1e-12 and abs(float(umax[7])) < 1e-12),
+                        "umin_base": [float(x) for x in umin[7:]],
+                        "umax_base": [float(x) for x in umax[7:]],
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion agent log
 
         # #region agent log
         # Snapshot right after wrench activates to explain "sudden drop" (typically v_des.z jump or saturation).
@@ -801,18 +889,33 @@ class Pr2QpWholeBodyAdmittance(Node):
             now_m = time.monotonic()
             if now_m - self._dbg_last_mono > 0.5:
                 # NOTE: _dbg_last_mono is also used above; shared throttling is OK for coarse logs.
+                # Get actual joint velocities from latest state for comparison with QP commands
+                try:
+                    actual_qdot = np.array(
+                        [float(self._latest_state[jn][1]) for jn in self._arm_joints],
+                        dtype=np.float64,
+                    )
+                    v_arm_actual = J[:, :7] @ actual_qdot
+                    arm_track = [float(actual_qdot[i]) / float(u[i]) if abs(float(u[i])) > 0.005 else float("nan")
+                                 for i in range(7)]
+                except Exception:
+                    actual_qdot = None
+                    v_arm_actual = None
+                    arm_track = None
                 self._dbg_write(
-                    "H6_ArmVsBaseContribution",
-                    "ee twist decomposition",
+                    "H_WBCTracking",
+                    "arm velocity cmd vs actual",
                     {
                         "wrench_active": bool(wrench_is_active),
-                        "w_filt": [float(x) for x in self._wrench_filtered],
-                        "v_des": [float(x) for x in v_des],
-                        "v_ach": [float(x) for x in v_ach],
-                        "v_arm": [float(x) for x in v_arm],
-                        "v_base": [float(x) for x in v_base],
-                        "u_arm_peak": float(np.max(np.abs(u[:7]))),
-                        "u_base": [float(u[7]), float(u[8]), float(u[9])],
+                        "v_des_xyz": [float(v_des[i]) for i in range(3)],
+                        "v_ach_xyz": [float(v_ach[i]) for i in range(3)],
+                        "v_arm_xyz": [float(v_arm[i]) for i in range(3)],
+                        "v_base_xyz": [float(v_base[i]) for i in range(3)],
+                        "u_arm": [float(u[i]) for i in range(7)],
+                        "u_base_world": [float(u[7]), float(u[8]), float(u[9])],
+                        "qdot_actual": [float(x) for x in actual_qdot] if actual_qdot is not None else None,
+                        "v_arm_actual_xyz": [float(v_arm_actual[i]) for i in range(3)] if v_arm_actual is not None else None,
+                        "arm_track_ratio": arm_track,
                     },
                 )
         except Exception:

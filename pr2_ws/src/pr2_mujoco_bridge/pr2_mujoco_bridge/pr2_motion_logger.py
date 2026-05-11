@@ -14,7 +14,8 @@ CSV 列（按顺序）：
   ee_qw ee_qx ee_qy ee_qz  末端姿态四元数
   tgt_x tgt_y tgt_z  IK 目标位置 (m)（未收到时为 nan）
   tgt_qw tgt_qx tgt_qy tgt_qz  IK 目标姿态
-  fx fy fz tx ty tz  施加力 (N) 和力矩 (N·m)
+  fx fy fz tx ty tz  施加力 (N) 和力矩 (N·m)，与 WrenchStamped.header.frame_id 一致（常为 base_link）
+  fx_odom fy_odom fz_odom  将线力旋转到 odom/world 水平面后的分量（与 ee_pose / QP 一致；无 odom 时与 fx..fz 相同）
   cmd_vx..cmd_wz    笛卡尔速度指令（TwistStamped）
   base_latched      导纳节点已锁定基准位姿后为 1，否则 0
   ee_speed_lin_est  由相邻日志采样估计的末端线速度范数 (m/s)（无 ee_pose 时为 nan）
@@ -74,6 +75,32 @@ class Pr2MotionLogger(Node):
     def __init__(self) -> None:
         super().__init__("pr2_motion_logger")
 
+        # #region agent log
+        self._dbg_log_path = "/workspace/.cursor/debug-a24b67.log"
+        self._dbg_prev_wrench_norm: Optional[float] = None
+
+        def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            try:
+                import json as _json
+
+                payload = {
+                    "sessionId": "a24b67",
+                    "runId": os.environ.get("DEBUG_RUN_ID", "motion_logger"),
+                    "hypothesisId": hypothesis_id,
+                    "location": "pr2_motion_logger.py",
+                    "message": message,
+                    "data": data,
+                    "timestamp": int(time.time() * 1000),
+                }
+                with open(self._dbg_log_path, "a", encoding="utf-8") as f:
+                    f.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+
+        self._dbg_write = _dbg_write
+        self._dbg_write("H0_DebugInit", "motion_logger init", {"pid": int(os.getpid())})
+        # #endregion agent log
+
         self.declare_parameter("output_path", "")
         self.declare_parameter("output_prefix", "pr2_motion")
         self.declare_parameter("log_rate_hz", 50.0)
@@ -110,6 +137,10 @@ class Pr2MotionLogger(Node):
         # Optional: align log start to a validator start signal.
         # When set (non-empty), logger will not write any rows until it receives this message.
         self.declare_parameter("validation_start_topic", "")
+        # Post-run EE plot (mass-damper ODE vs logged ee_xyz); same dir as CSV, *_plot.png
+        self.declare_parameter("plot_mass", [5.0, 5.0, 5.0])
+        self.declare_parameter("plot_damping", [320.0, 320.0, 320.0])
+        self.declare_parameter("plot_deadzone", [0.8, 0.8, 0.8])
 
         _raw_path = str(self.get_parameter("output_path").value).strip()
         if not _raw_path:
@@ -131,6 +162,10 @@ class Pr2MotionLogger(Node):
         self._th_wbc_j = float(self.get_parameter("stale_wbc_joint_ref_sec").value)
         self._th_wbc_v = float(self.get_parameter("stale_wbc_cmd_vel_sec").value)
         self._th_st_js = float(self.get_parameter("stale_state_joint_sec").value)
+
+        self._plot_mass = [float(x) for x in self.get_parameter("plot_mass").value]
+        self._plot_damping = [float(x) for x in self.get_parameter("plot_damping").value]
+        self._plot_deadzone = [float(x) for x in self.get_parameter("plot_deadzone").value]
 
         # Latest values (updated by callbacks)
         self._ee: Optional[PoseStamped] = None
@@ -159,6 +194,8 @@ class Pr2MotionLogger(Node):
         self._t_last_adm_dx: Optional[Time] = None
         self._t_last_qp: Optional[Time] = None
         self._t_last_odom: Optional[Time] = None
+        self._latest_odom: Optional[Odometry] = None
+        self._wrench_frame_id: str = ""
         self._t_last_wbc_joint: Optional[Time] = None
         self._t_last_wbc_twist: Optional[Time] = None
         self._t_last_state_joint: Optional[Time] = None
@@ -264,6 +301,7 @@ class Pr2MotionLogger(Node):
             "tgt_x", "tgt_y", "tgt_z",
             "tgt_qw", "tgt_qx", "tgt_qy", "tgt_qz",
             "fx", "fy", "fz", "tx", "ty", "tz",
+            "fx_odom", "fy_odom", "fz_odom",
             "cmd_vx", "cmd_vy", "cmd_vz", "cmd_wx", "cmd_wy", "cmd_wz",
             "base_latched",
             "ee_speed_lin_est",
@@ -318,6 +356,7 @@ class Pr2MotionLogger(Node):
 
     def _on_wrench(self, msg: WrenchStamped) -> None:
         self._t_last_wrench = self.get_clock().now()
+        self._wrench_frame_id = str(msg.header.frame_id)
         self._wrench = [
             float(msg.wrench.force.x),
             float(msg.wrench.force.y),
@@ -359,8 +398,34 @@ class Pr2MotionLogger(Node):
             if str(n) == "qp_obj" and i < len(msg.effort):
                 self._qp_obj = float(msg.effort[i])
 
-    def _on_odom(self, _msg: Odometry) -> None:
+    def _on_odom(self, msg: Odometry) -> None:
         self._t_last_odom = self.get_clock().now()
+        self._latest_odom = msg
+
+    @staticmethod
+    def _wrench_linear_force_odom(
+        fx_b: float,
+        fy_b: float,
+        fz: float,
+        frame_id: str,
+        odom: Optional[Odometry],
+    ) -> tuple[float, float, float]:
+        """Match pr2_qp_whole_body_admittance: base_link force -> odom xy via base yaw; fz unchanged."""
+        fid = frame_id.strip()
+        if fid and fid != "base_link":
+            return float(fx_b), float(fy_b), float(fz)
+        if odom is None:
+            return float(fx_b), float(fy_b), float(fz)
+        try:
+            qb = odom.pose.pose.orientation
+            qw, qx, qy, qz = float(qb.w), float(qb.x), float(qb.y), float(qb.z)
+            siny_cosp = 2.0 * (qw * qz + qx * qy)
+            cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz)
+            yaw_b = float(math.atan2(siny_cosp, cosy_cosp))
+            cy, sy = float(math.cos(yaw_b)), float(math.sin(yaw_b))
+            return cy * fx_b - sy * fy_b, sy * fx_b + cy * fy_b, float(fz)
+        except Exception:
+            return float(fx_b), float(fy_b), float(fz)
 
     def _on_wbc_joint_ref(self, _msg: JointState) -> None:
         self._t_last_wbc_joint = self.get_clock().now()
@@ -487,7 +552,60 @@ class Pr2MotionLogger(Node):
         stale_extra = self._stale_cols(now)
         extra = [float(self._base_latched), ee_speed_lin, ee_vx, ee_vy, ee_vz] + stale_extra
         dbg = self._adm_wrench + self._adm_dx + [float(self._qp_obj)]
-        row = [wall, ros, t_rel] + ee_row + tgt_row + self._wrench + self._cart_vel + extra + dbg + dyn_row + joint_row
+        fod = self._wrench_linear_force_odom(
+            float(self._wrench[0]),
+            float(self._wrench[1]),
+            float(self._wrench[2]),
+            self._wrench_frame_id,
+            self._latest_odom,
+        )
+        row = (
+            [wall, ros, t_rel]
+            + ee_row
+            + tgt_row
+            + self._wrench
+            + [fod[0], fod[1], fod[2]]
+            + self._cart_vel
+            + extra
+            + dbg
+            + dyn_row
+            + joint_row
+        )
+
+        # #region agent log
+        # Detect "force removed" edge as seen by logger (raw wrench), and capture whether cmd_vel is still large.
+        try:
+            fx, fy, fz = float(self._wrench[0]), float(self._wrench[1]), float(self._wrench[2])
+            wnorm = math.sqrt(fx * fx + fy * fy + fz * fz)
+            prev = self._dbg_prev_wrench_norm
+            self._dbg_prev_wrench_norm = float(wnorm)
+            if prev is not None:
+                # Edge: large drop in raw wrench norm within one tick.
+                if (prev >= 50.0) and (wnorm <= 5.0):
+                    cv = self._cart_vel
+                    cv_norm = math.sqrt(float(cv[0]) ** 2 + float(cv[1]) ** 2 + float(cv[2]) ** 2)
+                    self._dbg_write(
+                        "H1_RawWrenchDrop",
+                        "raw wrench dropped; snapshot logger state",
+                        {
+                            "t_rel_sec": float(t_rel),
+                            "ros_time_sec": float(ros),
+                            "wrench_norm_prev": float(prev),
+                            "wrench_norm_now": float(wnorm),
+                            "wrench_xyz": [float(fx), float(fy), float(fz)],
+                            "cmd_v_xyz": [float(cv[0]), float(cv[1]), float(cv[2])],
+                            "cmd_v_norm": float(cv_norm),
+                            "ee_xyz": [float(ee_row[0]), float(ee_row[1]), float(ee_row[2])]
+                            if self._ee is not None
+                            else None,
+                            "age_ee_pose_sec": float(stale_extra[6]) if len(stale_extra) >= 8 else float("nan"),
+                            "stale_ee_pose": float(stale_extra[7]) if len(stale_extra) >= 8 else float("nan"),
+                        },
+                    )
+        except Exception:
+            pass
+        # #endregion agent log
+
         self._writer.writerow([f"{v:.6f}" if not math.isnan(v) else "nan" for v in row])
         self._row_count += 1
 
@@ -501,6 +619,21 @@ class Pr2MotionLogger(Node):
         self.get_logger().info(
             f"pr2_motion_logger 已关闭: 共写入 {self._row_count} 行 → {self._output_path}"
         )
+        if self._row_count >= 2:
+            try:
+                from .ee_trajectory_plot import out_png_path_from_csv, plot_from_csv
+
+                out_png = out_png_path_from_csv(self._output_path)
+                plot_from_csv(
+                    self._output_path,
+                    out_png,
+                    self._plot_mass,
+                    self._plot_damping,
+                    self._plot_deadzone,
+                )
+                self.get_logger().info(f"轨迹对比图已保存: {out_png}")
+            except Exception as e:
+                self.get_logger().warning(f"轨迹对比图生成失败: {e}")
         super().destroy_node()
 
 

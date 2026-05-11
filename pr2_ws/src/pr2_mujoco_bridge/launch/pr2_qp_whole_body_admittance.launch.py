@@ -28,6 +28,9 @@ def generate_launch_description() -> LaunchDescription:
     force_x_arg = DeclareLaunchArgument("force_x", default_value="0.0")
     force_y_arg = DeclareLaunchArgument("force_y", default_value="0.0")
     force_z_arg = DeclareLaunchArgument("force_z", default_value="0.0")
+    torque_x_arg = DeclareLaunchArgument("torque_x", default_value="0.0")
+    torque_y_arg = DeclareLaunchArgument("torque_y", default_value="0.0")
+    torque_z_arg = DeclareLaunchArgument("torque_z", default_value="0.0")
     duration_arg = DeclareLaunchArgument("duration_sec", default_value="6.0")
     force_start_arg = DeclareLaunchArgument("force_start_sec", default_value="3.0")
     settle_arg = DeclareLaunchArgument("settle_after_sec", default_value="3.0")
@@ -67,6 +70,9 @@ def generate_launch_description() -> LaunchDescription:
                     LaunchConfiguration("initial_qpos_json"), value_type=str
                 )
             },
+            {"ctc_enable": True},
+            {"ctc_kp": 0.0},
+            {"ctc_kd": 80.0},
         ],
     )
 
@@ -103,6 +109,13 @@ def generate_launch_description() -> LaunchDescription:
             {"state_joint_topic": "state/joint_states"},
             {"output_cmd_vel_topic": "wbc/reference/cmd_vel"},
             {"output_joint_command_topic": "wbc/reference/joint_command"},
+            {"force_despring_thresh": [20.0, 20.0, 130.0]},
+            {"stiffness_linear": [0.0, 0.0, 0.0]},
+            {"hold_stiffness_linear": [0.0, 0.0, 0.0]},
+            {"stiffness_angular": [0.0, 0.0, 0.0]},
+            {"freeze_orientation": False},
+            {"mass_linear": [5.0, 5.0, 5.0]},
+            {"mass_angular": [0.5, 0.5, 0.5]},
         ],
     )
 
@@ -133,6 +146,9 @@ def generate_launch_description() -> LaunchDescription:
             {"force_x": ParameterValue(LaunchConfiguration("force_x"), value_type=float)},
             {"force_y": ParameterValue(LaunchConfiguration("force_y"), value_type=float)},
             {"force_z": ParameterValue(LaunchConfiguration("force_z"), value_type=float)},
+            {"torque_x": ParameterValue(LaunchConfiguration("torque_x"), value_type=float)},
+            {"torque_y": ParameterValue(LaunchConfiguration("torque_y"), value_type=float)},
+            {"torque_z": ParameterValue(LaunchConfiguration("torque_z"), value_type=float)},
             {"duration_sec": ParameterValue(LaunchConfiguration("duration_sec"), value_type=float)},
             {"force_start_sec": ParameterValue(
                 LaunchConfiguration("force_start_sec"), value_type=float
@@ -168,6 +184,9 @@ def generate_launch_description() -> LaunchDescription:
             {"log_rate_hz": 50.0},
             {"output_path": ParameterValue(LaunchConfiguration("log_path"), value_type=str)},
             {"validation_start_topic": "validation/start"},
+            {"plot_mass": [5.0, 5.0, 5.0]},
+            {"plot_damping": [320.0, 320.0, 400.0]},
+            {"plot_deadzone": [0.8, 0.8, 0.8]},
         ],
     )
 
@@ -183,6 +202,9 @@ def generate_launch_description() -> LaunchDescription:
             force_x_arg,
             force_y_arg,
             force_z_arg,
+            torque_x_arg,
+            torque_y_arg,
+            torque_z_arg,
             duration_arg,
             force_start_arg,
             settle_arg,
