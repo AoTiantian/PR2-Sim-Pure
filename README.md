@@ -99,18 +99,11 @@ python3 pr2_ws/src/pr2_mujoco_bridge/scripts/pr2_sim.py
 │       ├── launch/                 Launch files
 │       ├── pr2_mujoco_bridge/      Python package (import name: pr2_mujoco_bridge)
 │       └── scripts/                Standalone scripts (no-ROS demos, run helpers)
-├── src/pr2_ros2_stack/             Alternative ROS 2 stack
-│   ├── pr2_description/            URDF / xacro model descriptions
-│   ├── pr2_bringup/                ros2_control launch and config
-│   ├── pr2_mujoco_hardware/        MuJoCo hardware interface (C++)
-│   ├── pr2_mobile_controller/      Omnidirectional base controller (C++)
-│   └── pr2_mujoco_publisher/       MuJoCo TF publisher (C++)
 ├── unitree_mujoco/                 MuJoCo MJCF model files
 │   └── unitree_robots/pr2/         PR2 scene and robot definitions
 ├── third_party/                    External dependency clones (git-ignored)
 │   └── README.md                   Clone & setup instructions
-├── logs/                           Simulation run logs (git-ignored)
-└── *.svg, *.png                     Architecture / control diagrams
+└── logs/                           Simulation run logs (git-ignored)
 ```
 
 ### Core Files (Python — Main Development Path)

@@ -47,12 +47,19 @@ Weixin Image_*.jpg
 ,best*
 
 # --- External dependencies (clone manually or use git submodule) ---
-third_party/*
+third_party/**
 !third_party/README.md
 
 # --- Auxiliary workspace (cartesian_controllers experiments, not part of main project) ---
 cc_ws/
 
-# --- Local dev notes (personal, not for public distribution) ---
+# --- Alternative ROS 2 stack (ros2_control / C++ / URDF, not used by main admittance workflow) ---
+src/pr2_ros2_stack/
+
+# --- Local dev notes & diagrams (personal, not for public distribution) ---
 /项目的核心代码在哪.md
 /移动机械臂控制框图.pdf
+/移动机械臂控制框图.png
+/admittance control_torque.svg
+/admittance control_velocity.svg
+/admittance_topic_flow_runtime.svg
