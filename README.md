@@ -1,118 +1,199 @@
 # PR2-Sim-Pure-Plus
 
-基于 **MuJoCo 3.x** 与 **ROS 2 Jazzy** 的 PR2 机器人仿真开发环境。可选 **Docker / Dev Container** 与 NVIDIA GPU 加速。
+PR2 robot simulation environment based on **MuJoCo 3.x** and **ROS 2 Jazzy**, with whole-body admittance control via quadratic programming (QP).
 
-## 核心特性
+Optional **Docker / Dev Container** support with NVIDIA GPU acceleration.
 
-- **GPU 直通**：支持 NVIDIA 显卡硬件加速（如 RTX 系列）。
-- **一键环境**：使用 VS Code Dev Container，简化驱动与依赖配置。
-- **ROS 2 桥接**：`pr2_mujoco_bridge` 包发布 `joint_states`、`odom`、TF，并订阅 `cmd_vel`、`joint_commands` 等。
-- **内置演示**：节点默认 `demo_motion:=true`，效果接近旧版纯 Python 脚本（夹爪、左臂、全向底盘周期动作）。
-- **全向底盘**：近似侧移、自旋与手臂力矩/位置控制（详见包内文档）。
+## Key Features
 
-## 环境要求（宿主机）
+- **MuJoCo ↔ ROS 2 bridge**: `pr2_mujoco_bridge` publishes `joint_states`, `odom`, TF and subscribes to `cmd_vel`, `joint_commands`.
+- **QP whole-body admittance control**: 10-DOF QP (7 arm joints + base vx, vy, wz) maps external wrench to compliant Cartesian motion via mass-damper admittance law.
+- **GPU passthrough**: NVIDIA hardware acceleration support (RTX series, etc.).
+- **One-click environment**: VS Code Dev Container simplifies driver and dependency setup.
+- **Omnidirectional base**: Approximate lateral, rotational, and arm torque/position control.
+- **Computed torque control (CTC)**: Left arm velocity commands executed via MuJoCo inverse dynamics with configurable PD gains.
 
-在 Ubuntu 24.04 等系统上建议完成：
+## Requirements (Host Machine)
 
-1. **显卡驱动**：安装 NVIDIA 驱动；若需 GPU 进容器，BIOS 中按需处理 **Secure Boot**。
-2. **Docker**：已安装并配置好免 `sudo`（如需要）。
-3. **NVIDIA Container Toolkit**：将 GPU 映射进容器时使用。
-4. **图形 / MuJoCo 窗口**：在宿主机允许 X11 访问，例如 `xhost +local:root`（按需）；无桌面可用**无头模式**（见下文）。
+On Ubuntu 24.04 or similar:
 
-## 快速开始
+1. **GPU driver**: Install NVIDIA drivers. Handle Secure Boot in BIOS if needed for GPU passthrough.
+2. **Docker**: Install and configure rootless access.
+3. **NVIDIA Container Toolkit**: Required for GPU mapping into containers.
+4. **X11 access**: For MuJoCo viewer, allow X11 on host (`xhost +local:root` or equivalent). Headless mode available without X11.
 
-### 1. 克隆仓库
+## Quick Start
+
+### 1. Clone
 
 ```bash
-git clone https://github.com/你的用户名/你的仓库名.git
-cd 你的仓库名
+git clone https://github.com/<your-username>/<your-repo>.git
+cd <your-repo>
 ```
 
-### 2. 启动开发容器（可选）
+### 2. Dev Container (Recommended)
 
-- 用 VS Code 打开本仓库根目录。
-- 出现 **Reopen in Container** 时选择进入容器。
-- 首次构建可能需要几分钟。
+Open the repo root in VS Code. When prompted **"Reopen in Container"**, accept. First build may take a few minutes.
 
-### 3. 运行仿真（推荐：ROS 2）
+### 3. Run Simulation (ROS 2)
 
-在容器或本机已安装 ROS 2 Jazzy 的前提下：
+Inside the container or on a machine with ROS 2 Jazzy installed:
 
 ```bash
 cd pr2_ws
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select pr2_mujoco_bridge
+colcon build --packages-select pr2_mujoco_bridge --symlink-install
 source install/setup.bash
 
-# 带 MuJoCo 窗口（需可用 DISPLAY）
-ros2 run pr2_mujoco_bridge pr2_mujoco_sim
-
-# 或使用 launch
+# With MuJoCo viewer (requires DISPLAY / X11)
 ros2 launch pr2_mujoco_bridge pr2_mujoco_sim.launch.py
+
+# Headless mode (no window, suitable for SSH / CI / Docker without X11)
+ros2 launch pr2_mujoco_bridge pr2_mujoco_sim.launch.py use_viewer:=false
+
+# Disable built-in demo motion for pure ROS control
+ros2 launch pr2_mujoco_bridge pr2_mujoco_sim.launch.py demo_motion:=false
 ```
 
-**无窗口 / SSH / 无 X11**：
+### 4. QP Whole-Body Admittance Control
+
+Launch the full stack (simulation + state estimator + QP controller + WBC coordinator):
 
 ```bash
-ros2 run pr2_mujoco_bridge pr2_mujoco_sim --ros-args -p use_viewer:=false
+ros2 launch pr2_mujoco_bridge pr2_qp_whole_body_admittance.launch.py
 ```
 
-**只要 ROS 控制、不要内置演示动作**：
+Apply virtual wrench for validation:
 
 ```bash
-ros2 run pr2_mujoco_bridge pr2_mujoco_sim --ros-args -p demo_motion:=false
+ros2 launch pr2_mujoco_bridge pr2_qp_whole_body_admittance.launch.py \
+    force_x:=50 force_y:=50 force_z:=50
 ```
 
-更完整的话题说明、故障排除与示例命令见：
+Key launch arguments:
 
-**[pr2_ws/src/pr2_mujoco_bridge/README.md](pr2_ws/src/pr2_mujoco_bridge/README.md)**
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `use_viewer` | `false` | Open MuJoCo viewer (requires GPU + X11) |
+| `force_x/y/z` | `0.0` | Virtual wrench force in base_link frame (N) |
+| `torque_x/y/z` | `0.0` | Virtual wrench torque in base_link frame (Nm) |
+| `duration_sec` | `6.0` | Force application duration (s) |
+| `force_start_sec` | `3.0` | Delay before force onset (s) |
+| `initial_qpos_json` | `'{"l_shoulder_pan_joint": 0.35, ...}'` | Initial arm joint angles (rad) |
 
-### 3.1 移动机械臂控制栈（手绘框图 / WBC 占位）
+### 5. Pure Python Demo (No ROS)
 
-状态估计、`wbc/reference/*` 参考话题、WBC 协调器（占位）、底座加速度积分器、导纳/零空间桩节点，与 **`移动机械臂控制框图.png`** 对应；详细话题与启动方式见：
-
-**[pr2_ws/src/pr2_mujoco_bridge/README_WBC_STACK.md](pr2_ws/src/pr2_mujoco_bridge/README_WBC_STACK.md)**
-
-一键启动（仿真 + 状态汇总 + WBC 协调器）：
-
-```bash
-ros2 launch pr2_mujoco_bridge pr2_mobile_manipulator_stack.launch.py
-```
-
-### 4. 纯 Python 演示（无 ROS）
-
-不启动 ROS、仅直连 MuJoCo 时仍可使用：
+Direct MuJoCo connection without ROS:
 
 ```bash
 python3 pr2_ws/src/pr2_mujoco_bridge/scripts/pr2_sim.py
 ```
 
-## 项目结构
+## Project Structure
 
-| 路径 | 说明 |
+```
+.
+├── .devcontainer/                  Dev Container / Docker configuration
+├── pr2_ws/                         Main ROS 2 workspace
+│   └── src/pr2_mujoco_bridge/      pr2_mujoco_bridge package
+│       ├── launch/                 Launch files
+│       ├── pr2_mujoco_bridge/      Python package (import name: pr2_mujoco_bridge)
+│       └── scripts/                Standalone scripts (no-ROS demos, run helpers)
+├── src/pr2_ros2_stack/             Alternative ROS 2 stack
+│   ├── pr2_description/            URDF / xacro model descriptions
+│   ├── pr2_bringup/                ros2_control launch and config
+│   ├── pr2_mujoco_hardware/        MuJoCo hardware interface (C++)
+│   ├── pr2_mobile_controller/      Omnidirectional base controller (C++)
+│   └── pr2_mujoco_publisher/       MuJoCo TF publisher (C++)
+├── unitree_mujoco/                 MuJoCo MJCF model files
+│   └── unitree_robots/pr2/         PR2 scene and robot definitions
+├── third_party/                    External dependency clones (git-ignored)
+│   └── README.md                   Clone & setup instructions
+├── logs/                           Simulation run logs (git-ignored)
+└── *.svg, *.png                     Architecture / control diagrams
+```
+
+### Core Files (Python — Main Development Path)
+
+| File | Role |
 |------|------|
-| `.devcontainer/` | Dev Container / Docker 相关配置 |
-| `pr2_ws/src/pr2_mujoco_bridge/` | ROS 2 功能包 **pr2_mujoco_bridge**（MuJoCo↔ROS 桥、IK、末端位姿等） |
-| `pr2_ws/src/pr2_mujoco_bridge/pr2_mujoco_bridge/` | 同名 Python 子包（`ament_python` 惯例，import 名 `pr2_mujoco_bridge`） |
-| `pr2_ws/src/pr2_mujoco_bridge/scripts/` | 无 ROS 的 `pr2_sim.py` 等脚本 |
-| `src/pr2_ros2_stack/` | 另一套 ROS 2 工程目录（含 `pr2_description`、`pr2_bringup`、`pr2_mujoco_hardware` 等多个子包） |
-| `unitree_mujoco/unitree_robots/pr2/` | MuJoCo MJCF（如 `scene.xml`） |
-| `pr2_description/` | PR2 模型描述与网格等资源（若存在） |
+| `pr2_mujoco_bridge/pr2_sim_ros.py` | Main simulation loop: MuJoCo stepping, ROS pub/sub, cmd_vel→wheel mapping, CTC |
+| `pr2_mujoco_bridge/pr2_qp_whole_body_admittance.py` | QP admittance controller: mass-damper ODE → QP solve → cmd_vel + joint_command |
+| `pr2_mujoco_bridge/pr2_wbc_coordinator.py` | WBC coordinator: aggregates reference commands, null-space posture hold |
+| `pr2_mujoco_bridge/pr2_state_estimator.py` | State estimator: filters joint states and odometry |
+| `pr2_mujoco_bridge/pr2_ee_pose_publisher.py` | Forward kinematics → `ee_pose` topic |
+| `pr2_mujoco_bridge/pr2_dynamics_utils.py` | Jacobian computation (6×10 reduced), DOF indexing helpers |
+| `pr2_mujoco_bridge/pr2_motion_logger.py` | CSV logger + ODE-vs-actual trajectory plot |
+| `pr2_mujoco_bridge/pr2_arm_admittance_validator.py` | Validation: applies virtual wrench, checks displacement metrics |
 
-MuJoCo 场景默认路径（可在节点参数中修改）：
+### Control Architecture
 
-`unitree_mujoco/unitree_robots/pr2/scene.xml`
+```
+External Wrench (base_link)
+    │
+    ▼
+┌─────────────────────────────┐
+│ Admittance Law              │
+│ M dv/dt + B v = F - K dx   │  ← mass-damper-impedance
+│ v_des ∈ R⁶ (twist)          │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│ QP Solver (OSQP)            │
+│ min ‖J·u - v_des‖² + ‖u‖²  │  ← 10-DOF: arm(7) + base(vx,vy,wz)
+│ s.t. u_min ≤ u ≤ u_max     │
+└──────────────┬──────────────┘
+               │
+       ┌───────┴───────┐
+       ▼               ▼
+  cmd_vel          joint_command
+  (base twist)     (arm velocities)
+       │               │
+       ▼               ▼
+┌──────────┐   ┌──────────────┐
+│ Wheel    │   │ CTC (M·q̈ + h)│
+│ Mapping  │   │ + PD control │
+└────┬─────┘   └──────┬───────┘
+     │                │
+     ▼                ▼
+  MuJoCo Simulation (mj_step)
+```
 
-## 常见问题排查
+## Tuning the QP Admittance Controller
 
-| 现象 | 处理思路 |
-|------|----------|
-| 无法弹出仿真窗口 | 宿主机执行 `xhost +local:root`（或等价配置）；确认 `DISPLAY` 与 X11 转发 |
-| `Failed to open display` / `could not initialize GLFW` | 使用 `-p use_viewer:=false` 无头运行；或修复容器内图形环境 |
-| MESA / `iris` / DRI 报错 | 尝试 `LIBGL_ALWAYS_SOFTWARE=1`，或优先无头仿真 |
-| 容器内无 GPU | 检查 `nvidia-smi`；确认 NVIDIA Container Toolkit 与运行时配置 |
-| 构建 / 网络慢 | Dockerfile 中可配置镜像源；检查宿主机代理 |
+Key parameters in `pr2_qp_whole_body_admittance.launch.py`:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `damping_linear` | `[320, 320, 400]` | Damping B per axis (Ns/m) |
+| `stiffness_linear` | `[0, 0, 0]` | Stiffness K per axis (N/m) — zero = pure force→velocity |
+| `mass_linear` | `[5, 5, 5]` | Virtual mass M per axis (kg) |
+| `W_ee` | `[1,1,4,1,1,1]` | EE velocity error weights (Z boosted for gravity) |
+| `W_reg` | `[2e-3]×10` | Regularization on joint/base velocities |
+| `cmd_vel_linear_gain` | `16.0` | Base velocity → wheel speed gain |
+| `cmd_vel_world_scale` | `[1.03, 1.12, 1.0]` | Per-axis compensation for anisotropic base tracking |
+| `ctc_kp` | `30.0` | Arm CTC position gain |
+| `ctc_kd` | `160.0` | Arm CTC velocity gain |
+
+## Documentation
+
+- **Package overview**: `pr2_ws/src/pr2_mujoco_bridge/README.md`
+- **WBC stack topics & launch**: `pr2_ws/src/pr2_mujoco_bridge/README_WBC_STACK.md`
+- **IK usage**: `pr2_ws/src/pr2_mujoco_bridge/README_IK.md`
+- **Third-party repos**: `third_party/README.md`
+
+## Troubleshooting
+
+| Symptom | Solution |
+|---------|----------|
+| No simulation window | Host: `xhost +local:root`; verify `DISPLAY` and X11 forwarding |
+| `Failed to open display` / GLFW error | Use `-p use_viewer:=false` for headless; or fix container graphics |
+| MESA / llvmpipe rendering | Container lacks NVIDIA GL libraries. Install `nvidia-driver-libs` or use headless |
+| Viewer mode tracks worse than headless | Software rendering (CPU) steals compute from physics. Fix GPU OpenGL passthrough or use headless |
+| No GPU in container | Check `nvidia-smi`; verify NVIDIA Container Toolkit and runtime config |
+| Slow builds / network | Configure mirror sources in Dockerfile |
 
 ## License
 
-本项目遵循 **MIT** 开源协议。
+MIT — see [LICENSE](./LICENSE).

@@ -190,6 +190,9 @@ class Pr2QpWholeBodyAdmittance(Node):
         # Smooth published base cmd_vel to avoid caster hunting under small forces.
         self.declare_parameter("cmd_vel_lpf_alpha", 0.25)
         self.declare_parameter("cmd_vel_dir_hold_vplanar_min", 0.05)
+        # Per-axis scale on base velocity output before publishing (world frame [vx, vy, wz]).
+        # Compensates for anisotropic base tracking due to caster dynamics.
+        self.declare_parameter("cmd_vel_world_scale", [1.0, 1.0, 1.0])
 
         # debug
         self.declare_parameter("publish_debug", True)
@@ -255,6 +258,9 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._cmd_vel_alpha = _clamp(self._cmd_vel_alpha, 0.0, 1.0)
         self._cmd_vel_dir_hold_vmin = float(self.get_parameter("cmd_vel_dir_hold_vplanar_min").value)
         self._cmd_vel_dir_hold_vmin = max(0.0, self._cmd_vel_dir_hold_vmin)
+        self._cmd_vel_world_scale = np.array(list(self.get_parameter("cmd_vel_world_scale").value), dtype=np.float64)
+        if self._cmd_vel_world_scale.shape != (3,):
+            raise RuntimeError("cmd_vel_world_scale must have len=3")
 
         # Filter state for published cmd_vel (base frame).
         self._cmd_vel_vx_f = 0.0
@@ -727,6 +733,12 @@ class Pr2QpWholeBodyAdmittance(Node):
             return
         u = np.array(res.x, dtype=np.float64)
 
+        # Apply per-axis scale compensation on base velocity (world frame).
+        u_scaled = u.copy()
+        u_scaled[7] *= float(self._cmd_vel_world_scale[0])
+        u_scaled[8] *= float(self._cmd_vel_world_scale[1])
+        u_scaled[9] *= float(self._cmd_vel_world_scale[2])
+
         # Publish outputs
         # NOTE: MuJoCo free-joint velocities (used by Jacobians) are in world/odom frame,
         # but the sim consumes /cmd_vel as base-frame planar velocity (see pr2_sim_ros.py).
@@ -748,7 +760,7 @@ class Pr2QpWholeBodyAdmittance(Node):
             # rotate cmd_vel incorrectly when the wrist/EE orientation differs from base.
             _yaw = _yaw_b
             cy, sy = float(math.cos(_yaw)), float(math.sin(_yaw))
-            vx_w, vy_w = float(u[7]), float(u[8])
+            vx_w, vy_w = float(u_scaled[7]), float(u_scaled[8])
             # world/odom -> base: v_b = Rz(-yaw) v_w
             vx_cmd = cy * vx_w + sy * vy_w
             vy_cmd = -sy * vx_w + cy * vy_w
@@ -757,12 +769,12 @@ class Pr2QpWholeBodyAdmittance(Node):
             _yaw_ee = float("nan")
             _yaw_b = float("nan")
             vx_w = vy_w = float("nan")
-            vx_cmd = float(u[7])
-            vy_cmd = float(u[8])
+            vx_cmd = float(u_scaled[7])
+            vy_cmd = float(u_scaled[8])
         tw = Twist()
         tw.linear.x = float(vx_cmd)
         tw.linear.y = float(vy_cmd)
-        tw.angular.z = float(u[9])
+        tw.angular.z = float(u_scaled[9])
 
         # Smooth cmd_vel direction/magnitude (base frame) to avoid caster hunting when
         # QP direction oscillates under small forces.

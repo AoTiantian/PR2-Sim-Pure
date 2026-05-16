@@ -14,18 +14,17 @@ venv/
 .venv/
 pip-log.txt
 pip-delete-this-directory.txt
+*.egg-info/
 
 # --- MuJoCo ---
-# 如果你在本地下载了 MuJoCo 的压缩包或动态库，请忽略
 *.tar.gz
-*.so
 MUJOCO_LOG.TXT
 
-# --- IDE Settings ---
-.vscode/*
-!.vscode/launch.json
+# --- IDE / editor settings ---
+.vscode/
 .history/
 .cursor/
+.claude/
 
 # --- OS generated files ---
 .DS_Store
@@ -36,13 +35,24 @@ MUJOCO_LOG.TXT
 ehthumbs.db
 Thumbs.db
 
-# --- Local docs / diagrams (user-specific) ---
-/移动机械臂控制框图.pdf
-/项目的核心代码在哪.md
+# --- Simulation logs & plots ---
+logs/
+*.csv
 
-# External clones (track only the index README)
+# --- Personal screenshots / temporary images ---
+Weixin Image_*.png
+Weixin Image_*.jpg
+
+# --- Garbage / temp files ---
+,best*
+
+# --- External dependencies (clone manually or use git submodule) ---
 third_party/*
 !third_party/README.md
 
-# logs
-logs/*
+# --- Auxiliary workspace (cartesian_controllers experiments, not part of main project) ---
+cc_ws/
+
+# --- Local dev notes (personal, not for public distribution) ---
+/项目的核心代码在哪.md
+/移动机械臂控制框图.pdf
