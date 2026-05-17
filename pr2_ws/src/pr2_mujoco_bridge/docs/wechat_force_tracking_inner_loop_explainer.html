@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>PR2 force-tracking 群聊解释与当前分支代码对照</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #5b6673;
+      --line: #d9dee7;
+      --soft: #edf2f7;
+      --green: #1f7a5a;
+      --green-bg: #e8f5ef;
+      --blue: #255d9b;
+      --blue-bg: #eaf2fb;
+      --orange: #9a5b16;
+      --orange-bg: #fff2df;
+      --red: #9b2d2d;
+      --red-bg: #fbeaea;
+      --code: #111827;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+
+    header {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 46px);
+      max-width: 900px;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      background: #eef1f5;
+      border: 1px solid #dce2ea;
+      border-radius: 4px;
+      color: var(--code);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+      padding: 1px 5px;
+      white-space: nowrap;
+    }
+
+    .subtitle {
+      max-width: 920px;
+      color: var(--muted);
+      font-size: 17px;
+      margin-top: 14px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      background: var(--soft);
+      border-radius: 999px;
+      color: #374151;
+      font-size: 13px;
+      padding: 5px 11px;
+    }
+
+    section {
+      margin-top: 22px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+    }
+
+    .summary-grid,
+    .two-col,
+    .evidence-grid,
+    .faq-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .summary-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .two-col {
+      grid-template-columns: 1fr 0.78fr;
+      align-items: start;
+    }
+
+    .evidence-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .faq-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .card.green {
+      border-color: #b8dacb;
+      background: var(--green-bg);
+    }
+
+    .card.blue {
+      border-color: #bed3ee;
+      background: var(--blue-bg);
+    }
+
+    .card.orange {
+      border-color: #efd2a3;
+      background: var(--orange-bg);
+    }
+
+    .card.red {
+      border-color: #edc6c6;
+      background: var(--red-bg);
+    }
+
+    .kicker {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .lead {
+      font-size: 20px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 14px;
+      margin-top: 8px;
+    }
+
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 116px 1fr;
+      gap: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .topic {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .quote {
+      border-left: 4px solid #c8d3e3;
+      color: #2f3b4a;
+      padding-left: 14px;
+      margin-top: 8px;
+    }
+
+    .quote p + p {
+      margin-top: 5px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 13px;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: "->";
+      position: absolute;
+      right: -17px;
+      top: 35px;
+      color: var(--muted);
+      font-weight: 700;
+      z-index: 2;
+    }
+
+    .flow-step strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f1f5f9;
+      font-weight: 700;
+    }
+
+    .formula-img {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      display: block;
+    }
+
+    .caption {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .callout {
+      border-left: 5px solid var(--green);
+      background: var(--green-bg);
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin-top: 14px;
+    }
+
+    .warn {
+      border-left-color: var(--orange);
+      background: var(--orange-bg);
+    }
+
+    .code-path {
+      display: block;
+      margin-bottom: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin: 8px 0 0;
+    }
+
+    li + li {
+      margin-top: 5px;
+    }
+
+    @media (max-width: 980px) {
+      .summary-grid,
+      .two-col,
+      .evidence-grid,
+      .faq-grid,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-step:not(:last-child)::after {
+        content: "v";
+        right: 14px;
+        top: auto;
+        bottom: -18px;
+      }
+
+      .timeline-item {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>微信群聊里的“内环速度控制、重力补偿、导纳公式”到底在说什么</h1>
+      <p class="subtitle">
+        面向新加入 PR2-Sim-Pure 项目的同学：这份页面把群聊原话、图中导纳控制公式、
+        以及当前 <code>feat</code> 分支的 <code>pr2_mujoco_bridge</code> 实现放在同一张解释图里。
+      </p>
+      <div class="meta">
+        <span class="pill">项目：PR2-Sim-Pure</span>
+        <span class="pill">工作区：pr2_ws/src/pr2_mujoco_bridge</span>
+        <span class="pill">主题：force_tracking_reference</span>
+        <span class="pill">用途：新人读代码前的路线图</span>
+      </div>
+    </header>
+
+    <section>
+      <h2>一句话结论</h2>
+      <div class="summary-grid">
+        <div class="card green">
+          <div class="kicker">这段聊天的核心</div>
+          <p class="lead">大家在确认“外环算速度参考”与“仿真最终执行力矩”之间是不是有缺口。</p>
+        </div>
+        <div class="card blue">
+          <div class="kicker">当前分支事实</div>
+          <p>
+            臂端并不是把关节速度直接写入 MuJoCo 速度执行器，而是先算
+            <code>qdot</code> 参考，再转成带 <code>qfrc_bias</code> 补偿的
+            <code>effort</code> torque。
+          </p>
+        </div>
+        <div class="card orange">
+          <div class="kicker">需要避免的误读</div>
+          <p>
+            不要把当前 <code>force_tracking</code> 说成完整二阶导纳模型；它是第一阶段的
+            <code>force -> reference velocity -> reference position</code> 简化实现。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>整理版原始聊天：按议题重排</h2>
+      <div class="timeline">
+        <article class="timeline-item">
+          <div class="topic">1. 内环是什么</div>
+          <div>
+            <p>开头的问题是：仿真环境提供的内环速度控制到底怎么实现。</p>
+            <div class="quote">
+              <p>“仿真环境提供的内环速度控制是怎么实现的呀？”</p>
+              <p>“因为最后控制的都是力矩，所以重力补偿应该在速度环被补偿过了。”</p>
+              <p>“现在是直接给底层传的速度。”</p>
+            </div>
+            <p class="small">含义：他们在区分“控制接口看起来是速度”与“物理仿真最后一定由力/力矩驱动”。</p>
+          </div>
+        </article>
+
+        <article class="timeline-item">
+          <div class="topic">2. 是否需要力矩控制</div>
+          <div>
+            <p>中间大家讨论是否要把分支改成 torque control。</p>
+            <div class="quote">
+              <p>“之前是给底层传力矩，然后后面改成速度的。”</p>
+              <p>“我们现在应该加上力矩控制嘛？”</p>
+              <p>“不用哒，我们做实物也用不上力矩。”</p>
+            </div>
+            <p class="small">含义：实物平台通常给上层的是速度/位置接口；但仿真里如果速度环太理想，会掩盖重力和跟踪误差。</p>
+          </div>
+        </article>
+
+        <article class="timeline-item">
+          <div class="topic">3. 导纳公式被纠正</div>
+          <div>
+            <p>他们把外环导纳重新解释为虚拟质量阻尼系统。</p>
+            <div class="quote">
+              <p>“实际上，外环导纳控制就是一个虚拟的质量阻尼系统。”</p>
+              <p>“F = M_d x_ddot_d + D_d x_dot_d。”</p>
+              <p>“然后你算出来 x_dot_d，通过雅可比转换成关节速度 q_dot_d。”</p>
+            </div>
+            <p class="small">含义：外力不是直接等于关节命令，而是先驱动一个任务空间参考运动。</p>
+          </div>
+        </article>
+
+        <article class="timeline-item">
+          <div class="topic">4. 传感器读什么</div>
+          <div>
+            <p>对比曲线时，实际位置信息来自关节状态再做正运动学。</p>
+            <div class="quote">
+              <p>“一个是根据这个微分方程，纯数值模拟出来的。”</p>
+              <p>“一个是用这种方法控制机器人，在同样时刻读取从传感器传来的位置信息。”</p>
+              <p>“读关节角度然后用算逆运动学得到的位置信息嘛？”</p>
+              <p>“正运动学。”</p>
+            </div>
+            <p class="small">含义：已知关节角求末端位姿是 forward kinematics，不是 inverse kinematics。</p>
+          </div>
+        </article>
+
+        <article class="timeline-item">
+          <div class="topic">5. 问题定位</div>
+          <div>
+            <p>最后他们定位到：如果速度内环只是纯反馈，重力会导致稳态误差。</p>
+            <div class="quote">
+              <p>“找到原因了，内环不是完美的速度跟踪，是纯 P 控制，所以对重力有稳态误差。”</p>
+              <p>“所以实际上内环还是计算的力矩对吗？”</p>
+              <p>“是的，是发给内环一个速度，然后它自己最后还是转换成力矩。”</p>
+              <p>“如果要用动力学，M、C、g 这些函数有给吗？有的话，咱自己简单搓一个内环带补偿的。”</p>
+            </div>
+            <p class="small">含义：理想速度环、纯 P 速度环、带动力学补偿的 torque loop 会产生完全不同的仿真表现。</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>图中公式：聊天里的理论来源</h2>
+      <div class="two-col">
+        <div>
+          <p>
+            截图里的第 4 章公式把任务空间导纳写成状态空间模型。直观讲：
+            外界力 <code>F_h</code> 进入一个虚拟质量、阻尼系统，系统输出末端参考状态
+            <code>w = [x, x_dot]</code>，再离散化成每个采样周期更新一次的
+            <code>w(k+1)</code>。
+          </p>
+          <div class="callout">
+            <strong>对新人最重要的翻译：</strong>
+            <p>
+              图里讨论的是“参考运动怎么生成”；它不直接回答底层执行器是速度、位置还是力矩。
+              底层执行器属于另一层问题。
+            </p>
+          </div>
+          <div class="callout warn">
+            <strong>和当前分支的差异：</strong>
+            <p>
+              当前 <code>force_tracking</code> 模式没有完整维护二阶
+              <code>M-D</code> 状态空间，而是把力映射成受限参考速度，再积分出参考位置。
+            </p>
+          </div>
+        </div>
+        <figure>
+          <img class="formula-img" src="assets/wechat_force_tracking/21.jpg" alt="导纳控制公式截图">
+          <figcaption class="caption">
+            群聊所指公式截图：任务空间导纳模型、状态变量 <code>w</code> 以及离散化形式。
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section>
+      <h2>当前分支的控制链路</h2>
+      <p>
+        当前 <code>feat</code> 分支里，臂端 force-tracking 的执行链可以按下面读：
+      </p>
+      <div class="flow" aria-label="control pipeline">
+        <div class="flow-step">
+          <strong>external force</strong>
+          <p class="small">force injector 发布末端外力。</p>
+        </div>
+        <div class="flow-step">
+          <strong>reference generator</strong>
+          <p class="small">滤波、死区、限速、积分得到动态 reference。</p>
+        </div>
+        <div class="flow-step">
+          <strong>ee velocity</strong>
+          <p class="small">reference velocity 加位置误差跟踪项。</p>
+        </div>
+        <div class="flow-step">
+          <strong>Jacobian qdot</strong>
+          <p class="small">DLS Jacobian 把末端速度转为关节速度参考。</p>
+        </div>
+        <div class="flow-step">
+          <strong>compensated torque</strong>
+          <p class="small">用 <code>qfrc_bias</code> 和质量矩阵生成 effort。</p>
+        </div>
+        <div class="flow-step">
+          <strong>MuJoCo actuator</strong>
+          <p class="small">bridge 把 effort 写入 torque motor。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>理论模型 vs 当前分支</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>对象</th>
+            <th>它在说什么</th>
+            <th>当前分支里的对应关系</th>
+            <th>容易误解的点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>图中二阶导纳模型</td>
+            <td><code>F = M_d x_ddot + D_d x_dot</code>，状态是 <code>[x, x_dot]</code>。</td>
+            <td><code>fixed_equilibrium</code> 的 <code>AdmittanceState.step</code> 更接近这个思路，还额外有 stiffness。</td>
+            <td>它是 reference dynamics，不是执行器内环。</td>
+          </tr>
+          <tr>
+            <td>当前 <code>force_tracking</code></td>
+            <td>力经过滤波和死区后直接生成 reference velocity，再积分成 reference position。</td>
+            <td><code>ForceTrackingReferenceState.step</code>：<code>force_to_velocity_gain</code>、<code>max_velocity</code>、<code>max_displacement</code>。</td>
+            <td>它更像一阶 reference generator，不应声称完整复现图中 4-10。</td>
+          </tr>
+          <tr>
+            <td>臂端执行层</td>
+            <td>外环得到 <code>ee_vel_cmd</code>，Jacobian 求 <code>qdot</code>。</td>
+            <td>随后用 <code>qfrc_bias + M_arm * PD</code> 生成 torque effort。</td>
+            <td>“算速度”不等于“直接给 MuJoCo 速度执行器”。</td>
+          </tr>
+          <tr>
+            <td>底盘执行层</td>
+            <td>base admittance 输出 <code>Twist</code>。</td>
+            <td>bridge 把 <code>cmd_vel</code> 映射到底盘转向和轮速执行器。</td>
+            <td>底盘和臂的执行接口不同，不要混成同一个内环。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>代码证据区</h2>
+      <div class="evidence-grid">
+        <div class="card">
+          <h3>1. force-tracking reference 是一阶速度积分</h3>
+          <a class="code-path" href="../pr2_mujoco_bridge/admittance_core.py">pr2_mujoco_bridge/admittance_core.py</a>
+          <p>
+            <code>ForceTrackingReferenceState.step</code> 在第 173-211 行附近完成：
+            force filter、deadband、<code>force_to_velocity_gain</code>、velocity clamp、
+            position integration。
+          </p>
+        </div>
+        <div class="card">
+          <h3>2. fixed-equilibrium 是二阶 M-D-K 动力学</h3>
+          <a class="code-path" href="../pr2_mujoco_bridge/admittance_core.py">pr2_mujoco_bridge/admittance_core.py</a>
+          <p>
+            <code>AdmittanceState.step</code> 在第 242-253 行附近计算
+            <code>accel = (force - damping * velocity - stiffness * displacement) / mass</code>。
+          </p>
+        </div>
+        <div class="card">
+          <h3>3. 臂端先算 qdot，再转 torque</h3>
+          <a class="code-path" href="../pr2_mujoco_bridge/pr2_arm_admittance.py">pr2_mujoco_bridge/pr2_arm_admittance.py</a>
+          <p>
+            第 404-409 行附近计算 Jacobian；第 496-512 行附近求 <code>qdot_target</code>；
+            第 514-522 行附近生成 <code>tau</code>。
+          </p>
+        </div>
+        <div class="card">
+          <h3>4. torque 带 MuJoCo bias 补偿</h3>
+          <a class="code-path" href="../pr2_mujoco_bridge/pr2_arm_admittance.py">pr2_mujoco_bridge/pr2_arm_admittance.py</a>
+          <p>
+            第 411 行附近读取 <code>qfrc_bias</code>，第 521 行附近用
+            <code>tau_bias + m_arm @ (...)</code>，所以不是纯 P 速度内环。
+          </p>
+        </div>
+        <div class="card">
+          <h3>5. bridge 按字段选择执行器类型</h3>
+          <a class="code-path" href="../pr2_mujoco_bridge/pr2_sim_ros.py">pr2_mujoco_bridge/pr2_sim_ros.py</a>
+          <p>
+            文件头和第 363-390 行附近说明：<code>position</code> 写位置执行器，
+            <code>velocity</code> 写速度执行器，<code>effort</code> 写 torque motor。
+          </p>
+        </div>
+        <div class="card">
+          <h3>6. 底盘 force-tracking 输出 Twist</h3>
+          <a class="code-path" href="../pr2_mujoco_bridge/pr2_base_admittance.py">pr2_mujoco_bridge/pr2_base_admittance.py</a>
+          <p>
+            第 240-278 行附近同样先更新 reference，再发布 <code>Twist</code>，
+            后续由 bridge 映射到底盘轮速/转向。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>新人 FAQ</h2>
+      <div class="faq-grid">
+        <div class="card blue">
+          <h3>为什么“速度参考”最后会变成力矩？</h3>
+          <p>
+            因为速度参考只是外环希望机器人怎么动。真实动力学仿真里，关节不会凭空获得速度，
+            MuJoCo 最后要通过执行器控制量改变系统状态。当前臂端路径把 <code>qdot</code>
+            参考转换成 compensated torque。
+          </p>
+        </div>
+        <div class="card blue">
+          <h3>为什么说纯 P 速度内环会下垂？</h3>
+          <p>
+            机械臂受重力影响。若内环只根据速度误差输出力矩，<code>qdot_des = 0</code>
+            时不一定能提供维持姿态所需的重力补偿力矩，所以可能出现稳态误差或下垂。
+          </p>
+        </div>
+        <div class="card blue">
+          <h3>正运动学和逆运动学谁对？</h3>
+          <p>
+            如果传感器读到的是关节角，再算末端位置，那是正运动学 FK。
+            逆运动学 IK 是反过来：已知末端目标位置，求关节角。
+          </p>
+        </div>
+        <div class="card orange">
+          <h3>当前分支能不能声称复现了图中 4-10？</h3>
+          <p>
+            不能直接这么说。当前 <code>force_tracking</code> 是工程化的第一阶段动态参考，
+            不是完整状态空间离散导纳。可以说它实现了 force-driven bounded reference tracking。
+          </p>
+        </div>
+        <div class="card orange">
+          <h3>那当前代码是不是已经有重力补偿？</h3>
+          <p>
+            臂端 torque 路径读取了 MuJoCo <code>qfrc_bias</code>，这个量包含重力和速度相关偏置。
+            这比聊天里担心的“纯 P 速度环”更强，但它仍然是仿真侧实现，不等于真实 PR2 硬件接口。
+          </p>
+        </div>
+        <div class="card orange">
+          <h3>下一步如果要更贴近理论该做什么？</h3>
+          <p>
+            可以把 <code>force_tracking</code> reference generator 改成显式维护
+            <code>[x, x_dot]</code> 的二阶离散导纳状态，并用 CSV 同时对比理论状态和实测 FK 位姿。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>读这段群聊时的安全边界</h2>
+      <ul>
+        <li>群聊里有推测和临场纠正，最终解释必须以当前本地分支代码为准。</li>
+        <li>本页面只解释文档和代码链路，不改变控制代码、launch 文件或验收阈值。</li>
+        <li>当前项目仍是 simulation-first；本页面不构成真实 PR2 硬件控制方案。</li>
+        <li>如果后续要提交代码，应另外运行仓库 acceptance，而不是只凭本页面判断控制效果。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
