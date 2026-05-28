@@ -41,8 +41,24 @@ WORKDIR /workspace
 
 # 7. 渲染与环境配置
 ENV MUJOCO_GL=glfw
-# 自动 source 环境
-RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+
+# ------------------------ No root user --------------------------
+ARG USERNAME=user
+ARG UID=1000
+ARG GID=$UID
+
+RUN if getent passwd $UID; then userdel -r $(getent passwd $UID | cut -d: -f1); fi \
+    && if getent group $GID; then groupdel $(getent group $GID | cut -d: -f1); fi \
+    && groupadd -g $GID $USERNAME \
+    && useradd -lm -u $UID -g $USERNAME -s /bin/bash $USERNAME \
+    && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
+    && chown -R ${USERNAME}:${USERNAME} /workspace
+
+USER $USERNAME
+ENV USER $USERNAME
+
+# Copy configuration files
+RUN echo 'source /opt/ros/'$ROS_DISTRO'/setup.bash' >> /home/$USERNAME/.bashrc
 
 # 默认启动指令
 CMD ["bash"]

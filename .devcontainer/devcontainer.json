@@ -1,5 +1,7 @@
 {
     "name": "ROS2 Mujoco Project",
+    "remoteUser": "user",
+    "updateRemoteUserUID": true,
     "build": {
         "dockerfile": "Dockerfile"
     },
@@ -21,6 +23,6 @@
                 "ms-python.python"
             ]
         }
-    },
-    "postCreateCommand": "rosdep update"
+    }
+    // "postCreateCommand": "rosdep update"
 }
