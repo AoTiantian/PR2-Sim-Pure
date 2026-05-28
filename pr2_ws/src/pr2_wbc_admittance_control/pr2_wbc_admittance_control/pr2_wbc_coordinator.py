@@ -38,9 +38,17 @@ class Pr2WbcCoordinator(Node):
 
         # #region agent log
         self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._debug_trace = os.environ.get("PR2_DEBUG_TRACE", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         self._dbg_last_mono = 0.0
 
         def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            if not self._debug_trace:
+                return
             try:
                 os.makedirs(os.path.dirname(self._dbg_log_path) or ".", exist_ok=True)
                 payload = {

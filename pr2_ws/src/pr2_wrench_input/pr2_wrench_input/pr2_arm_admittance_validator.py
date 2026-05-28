@@ -119,8 +119,16 @@ class Pr2ArmAdmittanceValidator(Node):
         # #region agent log
         self._dbg_session_id = "33df0d"
         self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._debug_trace = os.environ.get("PR2_DEBUG_TRACE", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
         def _dbg_write(hypothesisId: str, message: str, data: dict) -> None:
+            if not self._debug_trace:
+                return
             try:
                 payload = {
                     "sessionId": self._dbg_session_id,
@@ -457,4 +465,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

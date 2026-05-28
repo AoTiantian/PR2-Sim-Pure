@@ -67,10 +67,18 @@ class Pr2MujocoSim(Node):
 
         # #region agent log
         self._dbg_log_path = "/workspace/.cursor/debug-33df0d.log"
+        self._debug_trace = os.environ.get("PR2_DEBUG_TRACE", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         self._dbg_last_mono = 0.0
         self._dbg_last_cmdvel_mono = 0.0
 
         def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            if not self._debug_trace:
+                return
             try:
                 import json as _json
                 os.makedirs(os.path.dirname(self._dbg_log_path) or ".", exist_ok=True)
@@ -629,7 +637,7 @@ class Pr2MujocoSim(Node):
         _now_ms = int(time.time() * 1000)
         if not hasattr(self, "_ctc_dbg_last_ms"):
             self._ctc_dbg_last_ms = 0
-        if _now_ms - self._ctc_dbg_last_ms >= 200:  # log at 5Hz
+        if self._debug_trace and _now_ms - self._ctc_dbg_last_ms >= 200:  # log at 5Hz
             self._ctc_dbg_last_ms = _now_ms
             import json as _json
             # Check torque clipping for all joints

@@ -10,7 +10,7 @@ This launch runs:
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
@@ -78,14 +78,14 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     state_est = Node(
-        package="pr2_mujoco_bridge",
+        package="pr2_wbc_admittance_control",
         executable="pr2_state_estimator",
         name="pr2_state_estimator",
         output="screen",
     )
 
     ee_pose = Node(
-        package="pr2_mujoco_bridge",
+        package="pr2_wbc_admittance_control",
         executable="pr2_ee_pose_publisher",
         name="pr2_ee_pose_publisher",
         output="screen",
@@ -98,7 +98,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     qp = Node(
-        package="pr2_mujoco_bridge",
+        package="pr2_wbc_admittance_control",
         executable="pr2_qp_whole_body_admittance",
         name="pr2_qp_whole_body_admittance",
         output="screen",
@@ -124,7 +124,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     wbc = Node(
-        package="pr2_mujoco_bridge",
+        package="pr2_wbc_admittance_control",
         executable="pr2_wbc_coordinator",
         name="pr2_wbc_coordinator",
         output="screen",
@@ -132,7 +132,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     validator = Node(
-        package="pr2_mujoco_bridge",
+        package="pr2_wrench_input",
         executable="pr2_arm_admittance_validator",
         name="pr2_qp_whole_body_validator",
         output="screen",
@@ -165,7 +165,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     logger = Node(
-        package="pr2_mujoco_bridge",
+        package="pr2_wbc_admittance_control",
         executable="pr2_motion_logger",
         name="pr2_motion_logger",
         output="screen",
@@ -200,7 +200,6 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         [
-            SetEnvironmentVariable("LIBGL_ALWAYS_SOFTWARE", "1"),
             model_arg,
             viewer_arg,
             force_x_arg,
@@ -224,4 +223,3 @@ def generate_launch_description() -> LaunchDescription:
             shutdown_on_done,
         ]
     )
-

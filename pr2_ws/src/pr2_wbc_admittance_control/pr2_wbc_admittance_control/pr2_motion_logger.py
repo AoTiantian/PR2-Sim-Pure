@@ -77,9 +77,17 @@ class Pr2MotionLogger(Node):
 
         # #region agent log
         self._dbg_log_path = "/workspace/.cursor/debug-a24b67.log"
+        self._debug_trace = os.environ.get("PR2_DEBUG_TRACE", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         self._dbg_prev_wrench_norm: Optional[float] = None
 
         def _dbg_write(hypothesis_id: str, message: str, data: dict) -> None:
+            if not self._debug_trace:
+                return
             try:
                 import json as _json
 
