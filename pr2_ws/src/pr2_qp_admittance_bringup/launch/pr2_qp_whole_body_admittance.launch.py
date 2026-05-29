@@ -58,7 +58,7 @@ def generate_launch_description() -> LaunchDescription:
             {"use_cmd_vel": True},
             # cmd_vel -> wheel velocity mapping gain. If too small, actual base speed
             # (measured from odom) will lag far behind cmd_vel. Tuned from debug logs.
-            {"cmd_vel_linear_gain": 16.0},
+            {"cmd_vel_linear_gain": 17.0},
             {
                 # Left arm initial posture (joint angle map). This is applied to MuJoCo qpos
                 # before the first simulation step.
@@ -73,7 +73,7 @@ def generate_launch_description() -> LaunchDescription:
             {"ctc_enable": True},
             {"ctc_kp": 30.0},
             {"ctc_kd": 160.0},
-            {"cmd_vel_steer_gate_k_min": 0.25},
+            {"cmd_vel_steer_gate_k_min": 0.12},
         ],
     )
 

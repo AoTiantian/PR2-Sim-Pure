@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y \
 # 5. 配置 pip 镜像源并直接安装 MuJoCo
 # 【修正：去掉了 pip3 install --upgrade pip 这一行】
 RUN pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
-    pip3 install mujoco dm_control
+    pip3 install mujoco dm_control osqp
 
 # 6. 设置工作目录
 WORKDIR /workspace
