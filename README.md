@@ -23,6 +23,7 @@ source checkouts.
 │   └── pr2_qp_admittance_bringup/         Launch/config bringup package
 └── unitree_mujoco/unitree_robots/pr2/
     ├── scene.xml
+    ├── scene_grasp_board.xml
     ├── robot_pr2.xml
     └── meshes/
 ```
@@ -82,6 +83,17 @@ When running outside the dev container, pass an absolute model path:
 ros2 launch pr2_qp_admittance_bringup pr2_qp_whole_body_admittance.launch.py \
   model_path:=/absolute/path/to/unitree_mujoco/unitree_robots/pr2/scene.xml
 ```
+
+Minimal friction grasp demo:
+
+```bash
+ros2 launch pr2_qp_admittance_bringup pr2_board_grasp_demo.launch.py
+```
+
+This demo loads `scene_grasp_board.xml`, starts the left gripper open, and lets
+the default gripper position target close onto a free board. The simulator
+publishes `mujoco/board_grasped` when both dedicated left-gripper contact geoms
+touch `board_geom`.
 
 ## Control Stack
 

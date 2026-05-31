@@ -1,0 +1,27 @@
+<mujoco model="pr2_board_grasp_scene">
+  <include file="robot_pr2_board_grasp.xml"/>
+
+  <asset>
+    <texture type="skybox" file="meshes/desert.png" gridsize="3 4" gridlayout=".U..LFRB.D.." />
+    <texture name="plane" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".3 .4 .5" width="512" height="512" mark="cross" markrgb=".8 .8 .8" />
+    <material name="plane" reflectance="0.3" texture="plane" texrepeat="1 1" texuniform="true" />
+    <material name="wood" rgba="0.6 0.4 0.2 1"/>
+  </asset>
+
+  <worldbody>
+    <light directional="true" pos="0 0 30" dir="0 -0.5 -1"/>
+
+    <geom name="floor" pos="0 0 0" size="0 0 .25" type="plane" material="plane" contype="7" conaffinity="7" condim="3" solref="0.001 0.01" solimp="0.9 0.95 0.001"/>
+
+    <body name="grasp_board" pos="-2.5334 1.3713 0.8858" quat="0.779700 -0.301167 -0.344025 -0.427801">
+      <freejoint name="board_free"/>
+      <geom name="board_geom" type="box" size="0.25 0.020 0.050" mass="0.45" material="wood" contype="10" conaffinity="10" condim="4" friction="2.5 0.03 0.003" solref="0.004 1" solimp="0.90 0.99 0.001"/>
+      <site name="board_center" type="sphere" size="0.015" rgba="0.9 0.1 0.1 1"/>
+    </body>
+  </worldbody>
+
+  <sensor>
+    <framepos name="board_pos" objtype="body" objname="grasp_board"/>
+    <framequat name="board_quat" objtype="body" objname="grasp_board"/>
+  </sensor>
+</mujoco>

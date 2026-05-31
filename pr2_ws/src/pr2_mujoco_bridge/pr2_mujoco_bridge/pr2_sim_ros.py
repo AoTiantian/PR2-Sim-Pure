@@ -35,7 +35,7 @@ import os
 import re
 import threading
 import time
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import mujoco
 import mujoco.viewer
@@ -201,13 +201,17 @@ class Pr2MujocoSim(Node):
         )
         import json as _json
         _raw_qpos = str(self.get_parameter("initial_qpos_json").value).strip()
-        self._initial_qpos: Dict[str, float] = {}
+        self._initial_qpos: Dict[str, Any] = {}
         if _raw_qpos:
             try:
-                self._initial_qpos = {k: float(v) for k, v in _json.loads(_raw_qpos).items()}
+                parsed = _json.loads(_raw_qpos)
+                if not isinstance(parsed, dict):
+                    raise ValueError("top-level value must be a JSON object")
+                self._initial_qpos = dict(parsed)
                 self.get_logger().info(f"initial_qpos_json 已加载: {self._initial_qpos}")
             except Exception as e:
                 self.get_logger().warn(f"initial_qpos_json 解析失败: {e}")
+                self._initial_qpos = {}
         self._odom_frame = (
             self.get_parameter("odom_frame").get_parameter_value().string_value
         )
@@ -389,6 +393,7 @@ class Pr2MujocoSim(Node):
         self._pub_joint_bias = self.create_publisher(JointState, "mujoco/joint_bias", 10)
         self._pub_joint_actuator = self.create_publisher(JointState, "mujoco/joint_actuator", 10)
         self._pub_odom = self.create_publisher(Odometry, "odom", 10)
+        self._pub_board_grasped = self.create_publisher(Bool, "mujoco/board_grasped", 10)
         self._tf_broadcaster = TransformBroadcaster(self)
 
         self.create_subscription(
@@ -413,6 +418,23 @@ class Pr2MujocoSim(Node):
         )
         if self._body_base < 0:
             self.get_logger().warn('未找到 body "base_link"，/odom 将不发布位姿')
+
+        self._board_geom_ids = self._geom_ids_by_names(("board_geom",))
+        self._board_left_finger_geom_ids = self._geom_ids_by_names(
+            ("l_gripper_l_board_contact",)
+        )
+        self._board_right_finger_geom_ids = self._geom_ids_by_names(
+            ("l_gripper_r_board_contact",)
+        )
+        self._board_grasp_ready = bool(
+            self._board_geom_ids
+            and self._board_left_finger_geom_ids
+            and self._board_right_finger_geom_ids
+        )
+        if self._board_grasp_ready:
+            self.get_logger().info(
+                "board grasp contact 检测已启用: 发布 mujoco/board_grasped"
+            )
 
         self._prev_base_pos = np.zeros(3)
         self._prev_odom_time = None
@@ -567,6 +589,36 @@ class Pr2MujocoSim(Node):
             if i >= 0:
                 out.append(i)
         return out
+
+    def _geom_ids_by_names(self, names: Tuple[str, ...]) -> List[int]:
+        out: List[int] = []
+        for name in names:
+            gid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_GEOM, name)
+            if gid >= 0:
+                out.append(int(gid))
+        return out
+
+    def _publish_board_grasped(self) -> None:
+        if not self._board_grasp_ready:
+            return
+        board = set(self._board_geom_ids)
+        left = set(self._board_left_finger_geom_ids)
+        right = set(self._board_right_finger_geom_ids)
+        left_touch = False
+        right_touch = False
+        for i in range(int(self._data.ncon)):
+            c = self._data.contact[i]
+            g1 = int(c.geom1)
+            g2 = int(c.geom2)
+            if (g1 in board and g2 in left) or (g2 in board and g1 in left):
+                left_touch = True
+            if (g1 in board and g2 in right) or (g2 in board and g1 in right):
+                right_touch = True
+            if left_touch and right_touch:
+                break
+        msg = Bool()
+        msg.data = bool(left_touch and right_touch)
+        self._pub_board_grasped.publish(msg)
 
     def _ctc_sync_reference_from_state(self) -> None:
         """Align CTC reference position with current q (after mj_forward / reset)."""
@@ -1207,10 +1259,27 @@ class Pr2MujocoSim(Node):
                 {"keys": sorted(list(self._initial_qpos.keys()))},
             )
             # #endregion agent log
-            for jn, angle in self._initial_qpos.items():
+            for jn, value in self._initial_qpos.items():
                 jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, jn)
                 if jid >= 0:
-                    self._data.qpos[int(self._model.jnt_qposadr[jid])] = float(angle)
+                    qadr = int(self._model.jnt_qposadr[jid])
+                    jtype = int(self._model.jnt_type[jid])
+                    if isinstance(value, (list, tuple)):
+                        if jtype == int(mujoco.mjtJoint.mjJNT_FREE):
+                            if len(value) != 7:
+                                self.get_logger().warn(
+                                    f"initial_qpos_json[{jn}] 是 freejoint，需要 7 个数，已忽略"
+                                )
+                                continue
+                            self._data.qpos[qadr : qadr + 7] = np.array(
+                                [float(x) for x in value], dtype=np.float64
+                            )
+                        else:
+                            self.get_logger().warn(
+                                f"initial_qpos_json[{jn}] 不是 freejoint，不能使用数组，已忽略"
+                            )
+                    else:
+                        self._data.qpos[qadr] = float(value)
             mujoco.mj_forward(self._model, self._data)
             self.get_logger().info("initial_qpos_json 已应用到 MuJoCo 初始状态")
             self._ctc_sync_reference_from_state()
@@ -1419,6 +1488,7 @@ class Pr2MujocoSim(Node):
             self._pub_joint_actuator.publish(js_act)
             self._maybe_log_joint_motion(js)
             self._publish_odom(stamp)
+            self._publish_board_grasped()
 
         def run_headless() -> None:
             self.get_logger().info(
