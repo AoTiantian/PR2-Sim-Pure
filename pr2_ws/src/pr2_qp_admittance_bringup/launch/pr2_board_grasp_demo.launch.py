@@ -50,6 +50,7 @@ def generate_launch_description() -> LaunchDescription:
             {"use_cmd_vel": False},
             {"lock_base_motion": True},
             {"lock_torso_motion": True},
+            {"gripper_open_time_sec": 8.0},
             {"joint_motion_log_rate_hz": 1.0},
             {"joint_motion_log_regex": "l_gripper|board"},
             {

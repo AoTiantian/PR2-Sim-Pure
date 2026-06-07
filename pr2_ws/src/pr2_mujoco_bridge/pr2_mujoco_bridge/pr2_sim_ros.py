@@ -150,6 +150,9 @@ class Pr2MujocoSim(Node):
         # Boost steer rate when target jumps far (prevents "stuck in old direction").
         self.declare_parameter("cmd_vel_steer_rate_boost_rad_s", 8.0)
         self.declare_parameter("cmd_vel_steer_rate_boost_err_rad", 1.0)
+        # Timed gripper release: if > 0, the left gripper will open to its max position
+        # at this sim-time (sec), releasing any grasped object.
+        self.declare_parameter("gripper_open_time_sec", -1.0)
         # When cmd_vel magnitude is small, atan2(vy,vx) becomes very sensitive to noise.
         # Hold the steering direction under small planar speed to avoid caster hunting.
         self.declare_parameter("cmd_vel_dir_hold_vplanar_min", 0.05)
@@ -289,6 +292,12 @@ class Pr2MujocoSim(Node):
         self._ctc_kd = float(
             self.get_parameter("ctc_kd").get_parameter_value().double_value
         )
+        self._gripper_open_time = float(
+            self.get_parameter("gripper_open_time_sec")
+            .get_parameter_value()
+            .double_value
+        )
+        self._gripper_open_done = False
         self._cmd_vel_vx_f = 0.0
         self._cmd_vel_vy_f = 0.0
         self._last_steer_target = None
@@ -474,6 +483,7 @@ class Pr2MujocoSim(Node):
 
         # 内置演示用执行器（与 scripts/pr2_sim.py 一致，按名称解析）
         self._demo_gripper_l = self._actuator_id_by_name("l_gripper_pos")
+        self._gripper_open_act_id = self._demo_gripper_l  # same actuator
         self._demo_steer_ids = self._actuator_ids_by_names(
             (
                 "fl_caster_steer",
@@ -1337,6 +1347,21 @@ class Pr2MujocoSim(Node):
                 ctrl = ctrl_saved
                 if self._torso_act_id is not None:
                     ctrl[self._torso_act_id] = self._torso_hold
+                # Timed gripper release: open gripper to max at the specified sim time.
+                # Must write to persistent _ctrl_target (not the local ctrl copy),
+                # otherwise the gripper only opens for a single step (~2ms).
+                if (
+                    not self._gripper_open_done
+                    and self._gripper_open_act_id >= 0
+                    and self._gripper_open_time > 0.0
+                    and float(self._data.time) >= self._gripper_open_time
+                ):
+                    with self._lock:
+                        self._ctrl_target[self._gripper_open_act_id] = 0.548
+                    self._gripper_open_done = True
+                    self.get_logger().info(
+                        f"夹爪已张开 (t={self._data.time:.2f}s)"
+                    )
             self._apply_cmd_vel_to_ctrl(ctrl)
             ctc_active = (not override) and (not self._demo_motion) and (len(self._ctc_act_ids) == 7)
             self._apply_ctc_torques(ctrl, active=ctc_active)
