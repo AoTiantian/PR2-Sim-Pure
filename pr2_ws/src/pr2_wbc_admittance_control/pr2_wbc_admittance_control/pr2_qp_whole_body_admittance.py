@@ -54,6 +54,7 @@ from std_msgs.msg import Bool
 from geometry_msgs.msg import TwistStamped
 
 from .pr2_dynamics_utils import DofIndex, get_ee_jacobian_6x10, make_reduced_dof_index
+from .qp_soft_constraints import nullspace_posture_cost
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -88,6 +89,7 @@ class LatchState:
     base_pose: Optional[PoseStamped] = None
     latched: bool = False
     wrench_was_active: bool = False
+    q_nominal: Optional[np.ndarray] = None  # (7,) arm joint angles at latch
 
 
 class Pr2QpWholeBodyAdmittance(Node):
@@ -192,6 +194,11 @@ class Pr2QpWholeBodyAdmittance(Node):
         # QP weights and limits
         self.declare_parameter("W_ee", [1.0] * 6)
         self.declare_parameter("W_reg", [1e-2] * 10)
+        # Posture hold soft constraint: biases arm joints toward their latched
+        # nominal configuration through the EE-task nullspace.
+        self.declare_parameter("posture_hold_enable", True)
+        self.declare_parameter("posture_hold_kp", 1.5)        # rad → rad/s
+        self.declare_parameter("W_posture", [0.1] * 7)        # arm joint weights
         self.declare_parameter("arm_max_joint_velocity_rad_s", 10.0)
         self.declare_parameter("base_max_linear_vel", 1.0)
         self.declare_parameter("base_max_angular_vel", 1.5)
@@ -258,6 +265,15 @@ class Pr2QpWholeBodyAdmittance(Node):
         if wreg.shape != (10,):
             raise RuntimeError("W_reg must have len=10")
         self._W_reg = np.diag(wreg)
+
+        self._posture_enable = bool(self.get_parameter("posture_hold_enable").value)
+        self._posture_kp = float(self.get_parameter("posture_hold_kp").value)
+        w_posture_list = list(self.get_parameter("W_posture").value)
+        if len(w_posture_list) != 7:
+            raise RuntimeError("W_posture must have len=7")
+        # Pad to 10: arm joints (7) + base DOF (3) with zero weight.
+        w_posture = np.array(w_posture_list + [0.0, 0.0, 0.0], dtype=np.float64)
+        self._W_posture = np.diag(w_posture)
 
         self._arm_vel_lim = float(self.get_parameter("arm_max_joint_velocity_rad_s").value)
         self._base_v_lim = float(self.get_parameter("base_max_linear_vel").value)
@@ -371,6 +387,14 @@ class Pr2QpWholeBodyAdmittance(Node):
 
         mujoco.mj_forward(self._model, self._data)
         return ok
+
+    def _snap_arm_q(self) -> np.ndarray:
+        """Return current arm joint positions as a (7,) numpy array."""
+        q = np.zeros(7, dtype=np.float64)
+        for i, jn in enumerate(self._arm_joints):
+            if jn in self._latest_state:
+                q[i] = float(self._latest_state[jn][0])
+        return q
 
     def _tick(self) -> None:
         if self._latest_pose is None or self._latest_wrench is None:
@@ -497,6 +521,8 @@ class Pr2QpWholeBodyAdmittance(Node):
         if (not self._latch.latched) or (self._latch.base_pose is None):
             self._latch.base_pose = self._latest_pose
             self._latch.latched = True
+            # Record nominal arm posture at initial latch.
+            self._latch.q_nominal = self._snap_arm_q()
             self._dbg_write(
                 "H1_LatchAndTopics",
                 "latched base pose",
@@ -506,6 +532,9 @@ class Pr2QpWholeBodyAdmittance(Node):
             self._latch.base_pose = self._latest_pose
             if self._reset_adm_vel_on_wrench_drop:
                 self._v_adm[:] = 0.0
+            # NOTE: q_nominal is NOT re-latched here.
+            # We want posture hold to always pull back toward the initial
+            # arm configuration, not freeze at the deformed posture.
             self._dbg_write(
                 "H1_LatchAndTopics",
                 "updated base pose on wrench drop",
@@ -613,6 +642,23 @@ class Pr2QpWholeBodyAdmittance(Node):
         # QP matrices
         P = J.T @ self._W_ee @ J + self._W_reg
         q = -(J.T @ self._W_ee @ v_des)
+
+        # Posture hold soft constraint: bias arm joints toward q_nominal.
+        # Project the cost into the EE-task nullspace so it cannot compete with
+        # the primary Cartesian tracking term.
+        if self._posture_enable and self._latch.q_nominal is not None:
+            u_ns = np.zeros(10, dtype=np.float64)
+            for i, jn in enumerate(self._arm_joints):
+                q_i = float(self._latest_state.get(jn, (0.0,))[0])
+                u_ns[i] = self._posture_kp * (float(self._latch.q_nominal[i]) - q_i)
+            H_posture, g_posture = nullspace_posture_cost(
+                J,
+                self._W_ee,
+                self._W_posture,
+                u_ns,
+            )
+            P = P + H_posture
+            q = q - g_posture
 
         # Box constraints
         umin = np.array(
@@ -1009,6 +1055,11 @@ def main() -> None:
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
+    except RuntimeError as exc:
+        # Launch global-shutdown can race with spin and trigger take_message
+        # conversion errors while subscriptions are being torn down.
+        if rclpy.ok():
+            raise exc
     finally:
         node.destroy_node()
         if rclpy.ok():

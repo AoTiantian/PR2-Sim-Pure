@@ -36,6 +36,8 @@ def generate_launch_description() -> LaunchDescription:
     settle_arg = DeclareLaunchArgument("settle_after_sec", default_value="3.0")
 
     log_arg = DeclareLaunchArgument("log_path", default_value="")
+    posture_hold_enable_arg = DeclareLaunchArgument("posture_hold_enable", default_value="true")
+    posture_hold_kp_arg = DeclareLaunchArgument("posture_hold_kp", default_value="1.5")
     initial_qpos_arg = DeclareLaunchArgument(
         "initial_qpos_json",
         default_value='{"l_shoulder_pan_joint": 0.35, "l_shoulder_lift_joint": 0.95, "l_upper_arm_roll_joint": 0.0, "l_elbow_flex_joint": -1.35, "l_forearm_roll_joint": 0.0, "l_wrist_flex_joint": -0.55, "l_wrist_roll_joint": 0.0}',
@@ -45,7 +47,7 @@ def generate_launch_description() -> LaunchDescription:
         package="pr2_mujoco_bridge",
         executable="pr2_mujoco_sim",
         name="pr2_mujoco_sim",
-        output="screen",
+        output="both",
         parameters=[
             {"model_path": LaunchConfiguration("model_path")},
             {
@@ -81,14 +83,14 @@ def generate_launch_description() -> LaunchDescription:
         package="pr2_wbc_admittance_control",
         executable="pr2_state_estimator",
         name="pr2_state_estimator",
-        output="screen",
+        output="both",
     )
 
     ee_pose = Node(
         package="pr2_wbc_admittance_control",
         executable="pr2_ee_pose_publisher",
         name="pr2_ee_pose_publisher",
-        output="screen",
+        output="both",
         parameters=[
             {"ee_pose_topic": "ee_pose"},
             {"odom_topic": "odom"},
@@ -101,7 +103,7 @@ def generate_launch_description() -> LaunchDescription:
         package="pr2_wbc_admittance_control",
         executable="pr2_qp_whole_body_admittance",
         name="pr2_qp_whole_body_admittance",
-        output="screen",
+        output="both",
         parameters=[
             {"model_path": LaunchConfiguration("model_path")},
             {"input_wrench_topic": "wbc/whole_body_wrench"},
@@ -117,6 +119,13 @@ def generate_launch_description() -> LaunchDescription:
             {"freeze_orientation": False},
             {"W_ee": [1.0, 1.0, 4.0, 1.0, 1.0, 1.0]},
             {"W_reg": [2e-3, 2e-3, 2e-3, 2e-3, 2e-3, 2e-3, 2e-3, 2e-3, 2e-3, 2e-3]},
+            {"posture_hold_enable": ParameterValue(
+                LaunchConfiguration("posture_hold_enable"), value_type=bool
+            )},
+            {"posture_hold_kp": ParameterValue(
+                LaunchConfiguration("posture_hold_kp"), value_type=float
+            )},
+            {"W_posture": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]},
             {"cmd_vel_world_scale": [1.03, 1.12, 1.0]},
             {"mass_linear": [5.0, 5.0, 5.0]},
             {"mass_angular": [0.5, 0.5, 0.5]},
@@ -127,7 +136,7 @@ def generate_launch_description() -> LaunchDescription:
         package="pr2_wbc_admittance_control",
         executable="pr2_wbc_coordinator",
         name="pr2_wbc_coordinator",
-        output="screen",
+        output="both",
         parameters=[{"nullspace_enable": False}],
     )
 
@@ -135,7 +144,7 @@ def generate_launch_description() -> LaunchDescription:
         package="pr2_wrench_input",
         executable="pr2_arm_admittance_validator",
         name="pr2_qp_whole_body_validator",
-        output="screen",
+        output="both",
         parameters=[
             {"wrench_topic": "wbc/whole_body_wrench"},
             # Provide force in base_link for intuitive "push +x/+y of robot".
@@ -168,7 +177,7 @@ def generate_launch_description() -> LaunchDescription:
         package="pr2_wbc_admittance_control",
         executable="pr2_motion_logger",
         name="pr2_motion_logger",
-        output="screen",
+        output="both",
         parameters=[
             {"ee_pose_topic": "ee_pose"},
             {"ik_target_topic": "ik_target_pose"},
@@ -212,6 +221,8 @@ def generate_launch_description() -> LaunchDescription:
             force_start_arg,
             settle_arg,
             log_arg,
+            posture_hold_enable_arg,
+            posture_hold_kp_arg,
             initial_qpos_arg,
             sim,
             state_est,
