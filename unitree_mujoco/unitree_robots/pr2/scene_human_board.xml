@@ -1,0 +1,51 @@
+<mujoco model="human_board_demo">
+  <compiler angle="radian"/>
+  <option gravity="0 0 -9.81" timestep="0.002"/>
+
+  <visual>
+    <global offwidth="1280" offheight="900"/>
+  </visual>
+
+  <asset>
+    <!-- Same visual environment as scene_grasp_board_long.xml, without PR2. -->
+    <texture type="skybox" file="meshes/desert.png"
+             gridsize="3 4" gridlayout=".U..LFRB.D.."/>
+    <texture name="plane" type="2d" builtin="checker"
+             rgb1=".2 .3 .4" rgb2=".3 .4 .5"
+             width="512" height="512" mark="cross" markrgb=".8 .8 .8"/>
+    <material name="plane" reflectance="0.3" texture="plane"
+              texrepeat="1 1" texuniform="true"/>
+    <material name="wood" rgba="0.6 0.4 0.2 1"/>
+  </asset>
+
+  <worldbody>
+    <light directional="true" pos="0 0 30" dir="0 -0.5 -1"/>
+    <geom name="floor" pos="0 0 0" size="0 0 .25" type="plane"
+          material="plane" contype="7" conaffinity="7" condim="3"
+          solref="0.001 0.01" solimp="0.9 0.95 0.001"/>
+
+    <!-- Keep the board in view. The old xyaxes pointed away from the origin,
+         so the viewer rendered only the skybox. -->
+    <camera name="fixed" mode="targetbody" target="board" pos="3 -4 4.0"/>
+
+    <!--
+      Board: 2.0m × 0.10m × 0.04m, 1.8 kg.
+      Local X points along the long edge.
+      Local Y is the horizontal width and local Z is the thin vertical axis.
+
+        free end (-X)  ←────  COM  ────→  human end (+X)
+                                             ↑
+                                         pos="+1.0"
+                                      (force applied here)
+    -->
+    <body name="board" pos="0 0 1.2" quat="1 0 0 0">
+      <freejoint name="board_joint"/>
+      <geom name="board_geom" type="box" size="1.0 0.05 0.02"
+            mass="1.8" material="wood"/>
+      <!-- human hand: far end, force applied here -->
+      <site name="hand" type="sphere" size="0.05" pos="1.0 0 0" rgba="1 0.5 0 1"/>
+      <!-- COM marker -->
+      <site name="center" type="sphere" size="0.025" pos="0 0 0" rgba="0 1 0 0.5"/>
+    </body>
+  </worldbody>
+</mujoco>
