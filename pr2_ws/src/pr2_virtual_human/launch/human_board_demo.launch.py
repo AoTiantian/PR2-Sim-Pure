@@ -23,10 +23,40 @@ def generate_launch_description() -> LaunchDescription:
         default_value="false",
         description="Use a point contact with no stabilizing grip moment",
     )
+    pid_enable = DeclareLaunchArgument(
+        "pid_enable",
+        default_value="true",
+        description="Track the horizontal trajectory using PID-controlled force",
+    )
+    trajectory_start_delay = DeclareLaunchArgument(
+        "trajectory_start_delay",
+        default_value="1.0",
+        description="Seconds to hover before horizontal tracking starts",
+    )
+    trajectory_x_amplitude = DeclareLaunchArgument(
+        "trajectory_x_amplitude",
+        default_value="0.45",
+        description="World-X amplitude of the horizontal figure-eight trajectory",
+    )
+    trajectory_y_amplitude = DeclareLaunchArgument(
+        "trajectory_y_amplitude",
+        default_value="0.30",
+        description="World-Y amplitude of the horizontal figure-eight trajectory",
+    )
+    trajectory_period = DeclareLaunchArgument(
+        "trajectory_period",
+        default_value="10.0",
+        description="Time to complete one closed figure-eight trajectory",
+    )
     duration = DeclareLaunchArgument(
         "duration",
-        default_value="0.0",
-        description="Simulation duration in seconds; zero runs until shutdown",
+        default_value="11.0",
+        description="Simulation duration in seconds; clamped to at most 15",
+    )
+    output_dir = DeclareLaunchArgument(
+        "output_dir",
+        default_value="/workspace/results/human_board",
+        description="Root directory for timestamped CSV and plot outputs",
     )
 
     sim = Node(
@@ -52,13 +82,52 @@ def generate_launch_description() -> LaunchDescription:
                 )
             },
             {
+                "pid_enable": ParameterValue(
+                    LaunchConfiguration("pid_enable"), value_type=bool
+                )
+            },
+            {
+                "trajectory_start_delay": ParameterValue(
+                    LaunchConfiguration("trajectory_start_delay"), value_type=float
+                )
+            },
+            {
+                "trajectory_x_amplitude": ParameterValue(
+                    LaunchConfiguration("trajectory_x_amplitude"), value_type=float
+                )
+            },
+            {
+                "trajectory_y_amplitude": ParameterValue(
+                    LaunchConfiguration("trajectory_y_amplitude"), value_type=float
+                )
+            },
+            {
+                "trajectory_period": ParameterValue(
+                    LaunchConfiguration("trajectory_period"), value_type=float
+                )
+            },
+            {
                 "duration": ParameterValue(
                     LaunchConfiguration("duration"), value_type=float
                 )
             },
+            {"output_dir": LaunchConfiguration("output_dir")},
         ],
     )
 
     return LaunchDescription(
-        [model_path, use_viewer, force_z, allow_rotation, duration, sim]
+        [
+            model_path,
+            use_viewer,
+            force_z,
+            allow_rotation,
+            pid_enable,
+            trajectory_start_delay,
+            trajectory_x_amplitude,
+            trajectory_y_amplitude,
+            trajectory_period,
+            duration,
+            output_dir,
+            sim,
+        ]
     )

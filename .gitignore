@@ -37,6 +37,7 @@ Thumbs.db
 
 # --- Simulation logs & plots ---
 logs/
+/results/
 *.csv
 
 # --- Personal screenshots / temporary images ---

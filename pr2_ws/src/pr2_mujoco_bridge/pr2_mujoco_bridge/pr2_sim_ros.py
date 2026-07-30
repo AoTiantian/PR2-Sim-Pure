@@ -42,7 +42,7 @@ import mujoco.viewer
 import numpy as np
 import rclpy
 import glfw
-from geometry_msgs.msg import TransformStamped, Twist
+from geometry_msgs.msg import TransformStamped, Twist, WrenchStamped
 from nav_msgs.msg import Odometry
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -137,6 +137,11 @@ class Pr2MujocoSim(Node):
         self.declare_parameter("initial_qpos_json", "")
         self.declare_parameter("odom_frame", "odom")
         self.declare_parameter("base_frame", "base_link")
+        # Virtual human hand force: applied directly to the board body via xfrc_applied.
+        self.declare_parameter("hand_force_topic", "virtual_human/hand_force")
+        self.declare_parameter("hand_force_enable", False)
+        # Offset from board COM to the hand contact point in board-local frame (metres).
+        self.declare_parameter("hand_force_offset", [1.0, 0.0, 0.0])
         self.declare_parameter("joint_motion_log_rate_hz", 0.0)
         self.declare_parameter("joint_motion_log_regex", "")
         # When cmd_vel steering changes fast, caster steering may lag.
@@ -421,12 +426,36 @@ class Pr2MujocoSim(Node):
             self._cb_disable_actuator_override,
             10,
         )
+        # Virtual human hand force — applied directly to board body via xfrc_applied.
+        self._hand_force_enable = bool(
+            self.get_parameter("hand_force_enable").get_parameter_value().bool_value
+        )
+        self._hand_force_latest: WrenchStamped | None = None
+        if self._hand_force_enable:
+            self.create_subscription(
+                WrenchStamped,
+                str(self.get_parameter("hand_force_topic").value),
+                self._cb_hand_force,
+                10,
+            )
+            self.get_logger().info(
+                f"hand force enabled: subscribing to {self.get_parameter('hand_force_topic').value}"
+            )
 
         self._body_base = mujoco.mj_name2id(
             self._model, mujoco.mjtObj.mjOBJ_BODY, "base_link"
         )
         if self._body_base < 0:
             self.get_logger().warn('未找到 body "base_link"，/odom 将不发布位姿')
+
+        self._board_body_id = mujoco.mj_name2id(
+            self._model, mujoco.mjtObj.mjOBJ_BODY, "grasp_board"
+        )
+        if self._board_body_id < 0:
+            if self._hand_force_enable:
+                self.get_logger().warn(
+                    '未找到 body "grasp_board"，hand force 将无法施加'
+                )
 
         self._board_geom_ids = self._geom_ids_by_names(("board_geom",))
         self._board_left_finger_geom_ids = self._geom_ids_by_names(
@@ -684,7 +713,7 @@ class Pr2MujocoSim(Node):
         e_dot = qdot_r - qdot
 
         mujoco.mj_forward(self._model, self._data)
-        mujoco.mj_fullM(self._model, self._ctc_M_buf, self._data.qM)
+        mujoco.mj_fullM(self._model, self._data, self._ctc_M_buf)
         v_ix = np.asarray(self._ctc_vadr, dtype=np.int32)
         M_arm = self._ctc_M_buf[np.ix_(v_ix, v_ix)]
         h_arm = np.array(
@@ -792,6 +821,50 @@ class Pr2MujocoSim(Node):
             with self._lock:
                 self._full_actuator_override = False
             self.get_logger().info("已关闭 actuator 全向量覆盖，恢复 joint_commands / cmd_vel 逻辑")
+
+    def _cb_hand_force(self, msg: WrenchStamped) -> None:
+        """Receive virtual human force to apply directly to the board body."""
+        self._hand_force_latest = msg
+
+    def _apply_hand_force_to_board(self) -> None:
+        """Apply latest hand force to the board body via xfrc_applied.
+
+        The force is specified in the world (odom) frame at the far end of the
+        board (the "hand" end, +1.0 m in board-local X from COM).  We convert
+        it to a wrench at the board COM (force + resulting torque) and write
+        xfrc_applied.
+        """
+        if (not self._hand_force_enable
+                or self._hand_force_latest is None
+                or self._board_body_id < 0):
+            return
+
+        msg = self._hand_force_latest
+        F = np.array([
+            float(msg.wrench.force.x),
+            float(msg.wrench.force.y),
+            float(msg.wrench.force.z),
+        ], dtype=np.float64)
+
+        # Hand offset from board COM in board-local frame.
+        r_local = np.array(
+            list(self.get_parameter("hand_force_offset").value),
+            dtype=np.float64,
+        )
+
+        # Get board COM position and rotation matrix (world frame)
+        bid = self._board_body_id
+        board_pos = self._data.xpos[bid].copy()
+        board_mat = self._data.xmat[bid].reshape(3, 3).copy()
+
+        # Offset in world frame
+        r_world = board_mat @ r_local
+
+        # Torque at COM: r × F
+        tau = np.cross(r_world, F)
+
+        # Write xfrc_applied (6D: force + torque at COM)
+        self._data.xfrc_applied[bid, :] = np.concatenate([F, tau])
 
     def _apply_cmd_vel_to_ctrl(self, target: np.ndarray) -> None:
         if not self._use_cmd_vel:
@@ -1368,6 +1441,7 @@ class Pr2MujocoSim(Node):
 
             self._data.ctrl[:] = ctrl
             if not self._pause_sim:
+                self._apply_hand_force_to_board()
                 mujoco.mj_step(self._model, self._data)
                 if self._data.time >= self._lock_base_settle_sec:
                     if self._base_lock_pending and self._base_free_qadr is not None:

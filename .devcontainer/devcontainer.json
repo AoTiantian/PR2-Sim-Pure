@@ -7,8 +7,10 @@
     },
     "workspaceFolder": "/workspace",
     "mounts": [
-        "source=${localWorkspaceFolder},target=/workspace,type=bind"
+        "source=${localWorkspaceFolder},target=/workspace,type=bind",
+        "source=${localEnv:HOME}/.config/xiaomi-mimo/api_key,target=/home/user/.config/xiaomi-mimo/api_key,type=bind,readonly"
     ],
+    "postStartCommand": "python3 /workspace/.devcontainer/configure-mimo-mcp.py",
     "runArgs": [
         "--net=host",
         "--ipc=host",

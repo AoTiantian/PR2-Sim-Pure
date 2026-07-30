@@ -14,6 +14,7 @@ setup(
             [
                 "launch/pr2_board_grasp_demo.launch.py",
                 "launch/pr2_qp_whole_body_admittance.launch.py",
+                "launch/pr2_admittance_validation.launch.py",
             ],
         ),
     ],
