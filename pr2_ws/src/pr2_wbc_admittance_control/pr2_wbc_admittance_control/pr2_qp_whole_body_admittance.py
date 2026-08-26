@@ -84,6 +84,22 @@ def _orientation_error_world(cur_q_wxyz: np.ndarray, tgt_q_wxyz: np.ndarray) -> 
     )
 
 
+def _quat_mul_wxyz(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Hamilton product for MuJoCo/ROS quaternions in wxyz order."""
+    aw, ax, ay, az = np.asarray(a, dtype=np.float64)
+    bw, bx, by, bz = np.asarray(b, dtype=np.float64)
+    q = np.array(
+        [
+            aw * bw - ax * bx - ay * by - az * bz,
+            aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw,
+        ],
+        dtype=np.float64,
+    )
+    return q / max(float(np.linalg.norm(q)), 1.0e-12)
+
+
 @dataclass
 class LatchState:
     base_pose: Optional[PoseStamped] = None
@@ -97,7 +113,12 @@ class Pr2QpWholeBodyAdmittance(Node):
         super().__init__("pr2_qp_whole_body_admittance")
 
         # #region agent log
-        self._dbg_log_path = "/workspace/.cursor/debug-a24b67.log"
+        # Keep opt-in traces writable when ROS2 is launched as the non-root
+        # container user.  The old hard-coded workspace file was root-owned,
+        # so all debug writes were silently dropped.
+        self._dbg_log_path = os.environ.get(
+            "PR2_DEBUG_LOG", "/tmp/pr2_wbc_debug_trace.log"
+        )
         self._debug_trace = os.environ.get("PR2_DEBUG_TRACE", "0").lower() in {
             "1",
             "true",
@@ -137,6 +158,7 @@ class Pr2QpWholeBodyAdmittance(Node):
             "/workspace/unitree_mujoco/unitree_robots/pr2/scene.xml",
         )
         self.declare_parameter("end_effector_body", "l_gripper_tool_frame")
+        self.declare_parameter("board_body", "grasp_board")
         self.declare_parameter("arm_joint_names", [
             "l_shoulder_pan_joint",
             "l_shoulder_lift_joint",
@@ -182,6 +204,34 @@ class Pr2QpWholeBodyAdmittance(Node):
         self.declare_parameter("reset_admittance_velocity_on_wrench_drop", False)
 
         self.declare_parameter("freeze_orientation", True)
+        # In the collaborative demo the virtual human publishes the desired
+        # board orientation.  Track that orientation directly instead of
+        # converting the large endpoint r×F moment into an unconstrained
+        # angular admittance velocity.
+        self.declare_parameter("desired_orientation_topic", "virtual_human/desired_hand_pose")
+        self.declare_parameter("orientation_tracking_enable", True)
+        self.declare_parameter("orientation_tracking_kp", [1.5, 1.5, 1.5])
+        # Optional low-gain Cartesian assistance.  The virtual-human target is
+        # specified at the far board endpoint; this maps it through the board
+        # geometry to the robot grasp endpoint so an orientation change does
+        # not masquerade as an unexplained Z error at the human hand.
+        self.declare_parameter("pose_tracking_enable", False)
+        self.declare_parameter("pose_tracking_kp", [0.6, 0.6, 0.8])
+        self.declare_parameter(
+            "pose_tracking_freeze_base",
+            True,
+        )
+        self.declare_parameter("human_hand_offset", [1.0, 0.0, 0.0])
+        # Relative location of the robot contact point in board coordinates.
+        # The physical-contact scene has no rigid orientation relation from
+        # which this can be read; use the measured point-contact geometry.
+        self.declare_parameter(
+            "board_to_ee_position", [-1.0070063, -0.02682674, -0.00000213]
+        )
+        self.declare_parameter(
+            "board_to_ee_quaternion",
+            [0.99410946, 0.00002539, -0.00013115, -0.10838066],
+        )
         self.declare_parameter("damping_angular", [24.0, 24.0, 18.0])
         self.declare_parameter("stiffness_angular", [35.0, 35.0, 20.0])
         self.declare_parameter("torque_deadzone", [0.08, 0.08, 0.08])
@@ -190,6 +240,9 @@ class Pr2QpWholeBodyAdmittance(Node):
         self.declare_parameter("wrench_activate_force_norm", 0.5)
         self.declare_parameter("wrench_activate_torque_norm", 0.05)
         self.declare_parameter("hold_until_wrench_active", True)
+        # Fixed-target calibration mode: hold the latched pose while recording
+        # the robot wrench instead of converting the support wrench to motion.
+        self.declare_parameter("fixed_target_mode", False)
 
         # QP weights and limits
         self.declare_parameter("W_ee", [1.0] * 6)
@@ -222,6 +275,34 @@ class Pr2QpWholeBodyAdmittance(Node):
         if self._ee_body_id < 0:
             raise RuntimeError(f"end_effector_body not found: {ee_body}")
 
+        # The desired pose topic is the board/human-hand pose.  The robot
+        # contact point is offset from the board COM.  Use the explicit
+        # runtime grasp relation passed by the launch file: the MuJoCo bridge
+        # applies ``initial_qpos_json`` and then re-synchronizes the weld, so
+        # the relation compiled from the XML default posture is stale.  Using
+        # that compiled quaternion (identity in this scene) creates a false
+        # ~12 degree yaw error and turns orientation tracking into large Y/Z
+        # endpoint drift over the two-metre board.
+        board_body = str(self.get_parameter("board_body").value)
+        board_id = int(mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, board_body))
+        if board_id < 0:
+            raise RuntimeError(f"board_body not found: {board_body}")
+        self._board_to_ee_position = np.asarray(
+            list(self.get_parameter("board_to_ee_position").value),
+            dtype=np.float64,
+        )
+        if self._board_to_ee_position.shape != (3,):
+            raise RuntimeError("board_to_ee_position must have len=3")
+        self._board_to_ee_quaternion = np.asarray(
+            list(self.get_parameter("board_to_ee_quaternion").value),
+            dtype=np.float64,
+        )
+        if self._board_to_ee_quaternion.shape != (4,):
+            raise RuntimeError("board_to_ee_quaternion must have len=4")
+        self._board_to_ee_quaternion /= max(
+            float(np.linalg.norm(self._board_to_ee_quaternion)), 1.0e-12
+        )
+
         self._arm_joints: List[str] = list(self.get_parameter("arm_joint_names").value)
         self._dof: DofIndex = make_reduced_dof_index(
             self._model,
@@ -244,6 +325,33 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._vmax_lin = np.array(list(self.get_parameter("max_linear_velocity").value), dtype=np.float64)
 
         self._freeze_ori = bool(self.get_parameter("freeze_orientation").value)
+        self._orientation_tracking_enable = bool(
+            self.get_parameter("orientation_tracking_enable").value
+        )
+        self._orientation_tracking_kp = np.array(
+            list(self.get_parameter("orientation_tracking_kp").value),
+            dtype=np.float64,
+        )
+        if self._orientation_tracking_kp.shape != (3,):
+            raise RuntimeError("orientation_tracking_kp must have len=3")
+        self._pose_tracking_enable = bool(
+            self.get_parameter("pose_tracking_enable").value
+        )
+        self._pose_tracking_kp = np.array(
+            list(self.get_parameter("pose_tracking_kp").value),
+            dtype=np.float64,
+        )
+        if self._pose_tracking_kp.shape != (3,):
+            raise RuntimeError("pose_tracking_kp must have len=3")
+        self._pose_tracking_freeze_base = bool(
+            self.get_parameter("pose_tracking_freeze_base").value
+        )
+        self._human_hand_offset = np.array(
+            list(self.get_parameter("human_hand_offset").value),
+            dtype=np.float64,
+        )
+        if self._human_hand_offset.shape != (3,):
+            raise RuntimeError("human_hand_offset must have len=3")
         self._b_ang = np.array(list(self.get_parameter("damping_angular").value), dtype=np.float64)
         self._k_ang = np.array(list(self.get_parameter("stiffness_angular").value), dtype=np.float64)
         self._dz_t = np.array(list(self.get_parameter("torque_deadzone").value), dtype=np.float64)
@@ -259,6 +367,7 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._act_force_norm = float(self.get_parameter("wrench_activate_force_norm").value)
         self._act_torque_norm = float(self.get_parameter("wrench_activate_torque_norm").value)
         self._hold_until_wrench = bool(self.get_parameter("hold_until_wrench_active").value)
+        self._fixed_target_mode = bool(self.get_parameter("fixed_target_mode").value)
 
         self._W_ee = np.diag(np.array(list(self.get_parameter("W_ee").value), dtype=np.float64))
         wreg = np.array(list(self.get_parameter("W_reg").value), dtype=np.float64)
@@ -267,6 +376,12 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._W_reg = np.diag(wreg)
 
         self._posture_enable = bool(self.get_parameter("posture_hold_enable").value)
+        if self._fixed_target_mode:
+            # The calibration hold uses the CTC's latched joint position as
+            # the sole arm-hold mechanism.  A secondary posture velocity can
+            # otherwise inject motion while the first complete joint-state
+            # sample is still arriving.
+            self._posture_enable = False
         self._posture_kp = float(self.get_parameter("posture_hold_kp").value)
         w_posture_list = list(self.get_parameter("W_posture").value)
         if len(w_posture_list) != 7:
@@ -293,11 +408,18 @@ class Pr2QpWholeBodyAdmittance(Node):
         # subscriptions
         self._latest_wrench: Optional[WrenchStamped] = None
         self._latest_pose: Optional[PoseStamped] = None
+        self._latest_desired_pose: Optional[PoseStamped] = None
         self._latest_odom: Optional[Odometry] = None
         self._latest_state: Dict[str, tuple[float, float]] = {}
 
         self.create_subscription(WrenchStamped, str(self.get_parameter("input_wrench_topic").value), self._cb_wrench, 10)
         self.create_subscription(PoseStamped, str(self.get_parameter("ee_pose_topic").value), self._cb_pose, 10)
+        self.create_subscription(
+            PoseStamped,
+            str(self.get_parameter("desired_orientation_topic").value),
+            self._cb_desired_pose,
+            10,
+        )
         self.create_subscription(Odometry, str(self.get_parameter("odom_topic").value), self._cb_odom, 10)
         self.create_subscription(JointState, str(self.get_parameter("state_joint_topic").value), self._cb_state_joint, 10)
 
@@ -324,13 +446,23 @@ class Pr2QpWholeBodyAdmittance(Node):
         self._P_pattern = sp.triu(sp.csc_matrix(np.ones((10, 10), dtype=np.float64))).tocsc()
 
         self.create_timer(self._dt, self._tick)
-        self.get_logger().info(f"qp whole-body admittance ready @ {hz:.1f}Hz")
+        self.get_logger().info(
+            f"qp whole-body admittance ready @ {hz:.1f}Hz, "
+            f"fixed_target_mode={self._fixed_target_mode}, "
+            f"freeze_orientation={self._freeze_ori}, "
+            f"orientation_tracking={self._orientation_tracking_enable}, "
+            f"pose_tracking={self._pose_tracking_enable}, "
+            f"board_to_ee_quat={np.round(self._board_to_ee_quaternion, 4).tolist()}"
+        )
 
     def _cb_wrench(self, msg: WrenchStamped) -> None:
         self._latest_wrench = msg
 
     def _cb_pose(self, msg: PoseStamped) -> None:
         self._latest_pose = msg
+
+    def _cb_desired_pose(self, msg: PoseStamped) -> None:
+        self._latest_desired_pose = msg
 
     def _cb_odom(self, msg: Odometry) -> None:
         self._latest_odom = msg
@@ -388,12 +520,13 @@ class Pr2QpWholeBodyAdmittance(Node):
         mujoco.mj_forward(self._model, self._data)
         return ok
 
-    def _snap_arm_q(self) -> np.ndarray:
-        """Return current arm joint positions as a (7,) numpy array."""
+    def _snap_arm_q(self) -> Optional[np.ndarray]:
+        """Return current arm positions once all seven state samples exist."""
+        if any(jn not in self._latest_state for jn in self._arm_joints):
+            return None
         q = np.zeros(7, dtype=np.float64)
         for i, jn in enumerate(self._arm_joints):
-            if jn in self._latest_state:
-                q[i] = float(self._latest_state[jn][0])
+            q[i] = float(self._latest_state[jn][0])
         return q
 
     def _tick(self) -> None:
@@ -528,7 +661,16 @@ class Pr2QpWholeBodyAdmittance(Node):
                 "latched base pose",
                 {"ros_t": float(self.get_clock().now().nanoseconds * 1e-9), "reason": "initial_latch"},
             )
-        elif prev_wrench_was_active and (not bool(wrench_is_active)):
+        if self._latch.q_nominal is None:
+            # The EE pose can arrive before the first complete joint-state
+            # message.  Do not silently latch an all-zero posture (which
+            # would command the arm away from the configured initial pose).
+            self._latch.q_nominal = self._snap_arm_q()
+        elif (
+            prev_wrench_was_active
+            and (not bool(wrench_is_active))
+            and (not self._fixed_target_mode)
+        ):
             self._latch.base_pose = self._latest_pose
             if self._reset_adm_vel_on_wrench_drop:
                 self._v_adm[:] = 0.0
@@ -540,6 +682,14 @@ class Pr2QpWholeBodyAdmittance(Node):
                 "updated base pose on wrench drop",
                 {"ros_t": float(self.get_clock().now().nanoseconds * 1e-9), "reason": "wrench_drop_latch"},
             )
+        elif (not bool(wrench_is_active)) and (not self._fixed_target_mode):
+            # During the settle/latch phase the arm and the dynamic board can
+            # still move under gravity.  Keep the reference synchronized until
+            # the first non-zero human wrench; otherwise the human controller
+            # and the robot QP start the trajectory from different heights.
+            self._latch.base_pose = self._latest_pose
+            if self._reset_adm_vel_on_wrench_drop:
+                self._v_adm[:] = 0.0
         self._latch.wrench_was_active = bool(wrench_is_active)
 
         # publish latch state for logger/validator
@@ -574,7 +724,9 @@ class Pr2QpWholeBodyAdmittance(Node):
             w[i] = _apply_deadzone(float(w[i]), float(self._dz_f[i]))
             w[3 + i] = _apply_deadzone(float(w[3 + i]), float(self._dz_t[i]))
 
-        # Admittance (mass-damper): M dv/dt + B v = F - K dx  =>  v += dt * (F - K dx - B v) / M
+        # Admittance (mass-damper): M dv/dt + B v = F - K dx.
+        # Fixed-target mode replaces this with a zero motion reference so the
+        # support wrench can be measured without turning into transport motion.
         dt = float(self._dt)
         v_des = np.zeros(6, dtype=np.float64)
         v_des_raw = np.zeros(6, dtype=np.float64)
@@ -594,26 +746,154 @@ class Pr2QpWholeBodyAdmittance(Node):
             elif abs(float(self._wrench_filtered[i])) >= float(self._despring_thresh[i]):
                 k_lin[i] = 0.0
         for i in range(3):
-            m = max(float(self._m_lin[i]), 1e-6)
-            b = max(float(b_lin[i]), 1e-6)
-            f_net = float(w[i]) - float(k_lin[i]) * float(dx_lin[i])
-            self._v_adm[i] += dt * (f_net - b * self._v_adm[i]) / m
-            v_des_raw[i] = self._v_adm[i]
-            v_des[i] = _clamp(float(v_des_raw[i]), -float(self._vmax_lin[i]), float(self._vmax_lin[i]))
-            self._v_adm[i] = float(v_des[i])
+            if self._fixed_target_mode:
+                # Calibration mode is a true fixed-pose hold: the CTC keeps
+                # the arm at the latched joint configuration while the
+                # measured robot wrench is logged.  Do not convert the
+                # external support wrench or transient pose noise into a
+                # second motion command; that would move the calibration
+                # target and corrupt the static wrench comparison.
+                v_des_raw[i] = 0.0
+                v_des[i] = 0.0
+                self._v_adm[i] = 0.0
+            else:
+                m = max(float(self._m_lin[i]), 1e-6)
+                b = max(float(b_lin[i]), 1e-6)
+                f_net = float(w[i]) - float(k_lin[i]) * float(dx_lin[i])
+                self._v_adm[i] += dt * (f_net - b * self._v_adm[i]) / m
+                v_des_raw[i] = self._v_adm[i]
+                v_des[i] = _clamp(float(v_des_raw[i]), -float(self._vmax_lin[i]), float(self._vmax_lin[i]))
+                self._v_adm[i] = float(v_des[i])
             v_sat_lin[i] = bool(abs(float(v_des_raw[i])) > float(self._vmax_lin[i]) + 1e-12)
+
+        # Optional compliant Cartesian assistance toward the desired robot
+        # grasp pose.  The target topic carries the far human-hand endpoint;
+        # transform it to the robot endpoint with the measured contact geometry:
+        #   p_ee* = p_hand* + R_board* (r_ee - r_hand).
+        # This is intentionally added at low gain to preserve the wrench-based
+        # admittance behavior while compensating the large lever arm during
+        # orientation changes.
+        if self._pose_tracking_enable and not self._fixed_target_mode:
+            # Hold the initially latched EE pose until a human wrench starts
+            # the trajectory.  Using the live hand pose during latch would let
+            # the robot follow its own gravity-induced board drift.
+            if wrench_is_active and self._latest_desired_pose is not None:
+                target_pose = self._latest_desired_pose.pose
+                q_board_target = np.array(
+                    [
+                        float(target_pose.orientation.w),
+                        float(target_pose.orientation.x),
+                        float(target_pose.orientation.y),
+                        float(target_pose.orientation.z),
+                    ],
+                    dtype=np.float64,
+                )
+                r_board_target = _quat_wxyz_to_rotmat(q_board_target)
+                p_hand_target = np.array(
+                    [
+                        float(target_pose.position.x),
+                        float(target_pose.position.y),
+                        float(target_pose.position.z),
+                    ],
+                    dtype=np.float64,
+                )
+                p_board_target = p_hand_target - r_board_target @ self._human_hand_offset
+                p_ee_target = p_board_target + r_board_target @ self._board_to_ee_position
+            else:
+                p_ee_target = np.array(
+                    [
+                        float(base.position.x),
+                        float(base.position.y),
+                        float(base.position.z),
+                    ],
+                    dtype=np.float64,
+                )
+            p_ee_current = np.array(
+                [
+                    float(cur.position.x),
+                    float(cur.position.y),
+                    float(cur.position.z),
+                ],
+                dtype=np.float64,
+            )
+            pose_position_error = p_ee_target - p_ee_current
+            v_pose = self._pose_tracking_kp * pose_position_error
+            # In explicit trajectory-assist mode the Cartesian target is the
+            # primary linear task.  The measured wrench still drives the
+            # board physically and is logged for load-sharing analysis, but
+            # adding its admittance velocity here would create a steady pose
+            # offset proportional to the robot's support load.
+            v_des[:3] = np.clip(v_pose, -self._vmax_lin, self._vmax_lin)
         if self._freeze_ori:
             self._v_adm[3:6] = 0.0
         else:
             v_sat_ang = [False, False, False]
-            for i in range(3):
-                m = max(float(self._m_ang[i]), 1e-6)
-                b = max(float(self._b_ang[i]), 1e-6)
-                f_net = float(w[3 + i]) - float(self._k_ang[i]) * float(dx_ang[i])
-                self._v_adm[3 + i] += dt * (f_net - b * self._v_adm[3 + i]) / m
-                v_des_raw[3 + i] = self._v_adm[3 + i]
-                v_des[3 + i] = _clamp(float(v_des_raw[3 + i]), -float(self._vmax_ang[i]), float(self._vmax_ang[i]))
-                self._v_adm[3 + i] = float(v_des[3 + i])
+            if self._fixed_target_mode:
+                for i in range(3):
+                    v_des_raw[3 + i] = 0.0
+                    v_des[3 + i] = 0.0
+                    self._v_adm[3 + i] = 0.0
+            elif self._orientation_tracking_enable and not self._fixed_target_mode:
+                # The desired pose is the virtual-human board-end pose.  After
+                # applying the contact offset below, it becomes the robot-tool
+                # orientation reference.  This direct task reference avoids
+                # treating the endpoint force lever-arm moment as a user
+                # command to spin the robot.
+                q_cur = np.array(
+                    [
+                        float(cur.orientation.w),
+                        float(cur.orientation.x),
+                        float(cur.orientation.y),
+                        float(cur.orientation.z),
+                    ],
+                    dtype=np.float64,
+                )
+                if wrench_is_active and self._latest_desired_pose is not None:
+                    q_des_board = np.array(
+                        [
+                            float(self._latest_desired_pose.pose.orientation.w),
+                            float(self._latest_desired_pose.pose.orientation.x),
+                            float(self._latest_desired_pose.pose.orientation.y),
+                            float(self._latest_desired_pose.pose.orientation.z),
+                        ],
+                        dtype=np.float64,
+                    )
+                    # Convert the board target to the robot-tool target using the
+                    # legacy body relation body2=body1*relpose from the MuJoCo
+                    # equality constraint; point-contact scenes use the
+                    # explicit fallback offset loaded at initialization.
+                    q_des = _quat_mul_wxyz(q_des_board, self._board_to_ee_quaternion)
+                else:
+                    q_des = np.array(
+                        [
+                            float(base.orientation.w),
+                            float(base.orientation.x),
+                            float(base.orientation.y),
+                            float(base.orientation.z),
+                        ],
+                        dtype=np.float64,
+                    )
+                desired_ori_error = _orientation_error_world(q_cur, q_des)
+                for i in range(3):
+                    v_cmd = float(self._orientation_tracking_kp[i]) * float(desired_ori_error[i])
+                    v_des_raw[3 + i] = v_cmd
+                    v_des[3 + i] = _clamp(
+                        v_cmd,
+                        -float(self._vmax_ang[i]),
+                        float(self._vmax_ang[i]),
+                    )
+                    self._v_adm[3 + i] = float(v_des[3 + i])
+                    v_sat_ang[i] = bool(abs(v_cmd) > float(self._vmax_ang[i]) + 1e-12)
+            else:
+                for i in range(3):
+                    m = max(float(self._m_ang[i]), 1e-6)
+                    b = max(float(self._b_ang[i]), 1e-6)
+                    f_net = float(w[3 + i]) - float(self._k_ang[i]) * float(dx_ang[i])
+                    self._v_adm[3 + i] += dt * (f_net - b * self._v_adm[3 + i]) / m
+                    v_des_raw[3 + i] = self._v_adm[3 + i]
+                    v_des[3 + i] = _clamp(float(v_des_raw[3 + i]), -float(self._vmax_ang[i]), float(self._vmax_ang[i]))
+                    self._v_adm[3 + i] = float(v_des[3 + i])
+                    v_sat_ang[i] = bool(abs(float(v_des_raw[3 + i])) > float(self._vmax_ang[i]) + 1e-12)
                 v_sat_ang[i] = bool(abs(float(v_des_raw[3 + i])) > float(self._vmax_ang[i]) + 1e-12)
 
         # #region agent log
@@ -673,7 +953,14 @@ class Pr2QpWholeBodyAdmittance(Node):
         # When wrench is inactive, freeze base to avoid wheel spinning.
         # This keeps "hold position" purely on the arm, matching user expectation.
         freeze_base_no_wrench = True
-        if freeze_base_no_wrench and (not wrench_is_active):
+        if (
+            freeze_base_no_wrench
+            and (
+                not wrench_is_active
+                or self._fixed_target_mode
+                or (self._pose_tracking_enable and self._pose_tracking_freeze_base)
+            )
+        ):
             umin[7:] = 0.0
             umax[7:] = 0.0
 
@@ -787,6 +1074,16 @@ class Pr2QpWholeBodyAdmittance(Node):
             return
         u = np.array(res.x, dtype=np.float64)
 
+        if self._fixed_target_mode:
+            # A fixed-target wrench experiment is a hold, not an admittance
+            # motion command.  Numerical warm starts and the redundant arm
+            # null space can otherwise leave a non-zero QP solution even when
+            # v_des is exactly zero; that motion is fed through the rigid
+            # board weld and re-excites the vertical dynamics.  Keep the
+            # robot's pose controller active, but send zero velocity
+            # references for this mode.
+            u[:] = 0.0
+
         # Apply per-axis scale compensation on base velocity (world frame).
         u_scaled = u.copy()
         u_scaled[7] *= float(self._cmd_vel_world_scale[0])
@@ -886,6 +1183,15 @@ class Pr2QpWholeBodyAdmittance(Node):
                         "arm_peak_abs_qdot": float(arm_peak),
                         "v_des": [float(x) for x in v_des.tolist()],
                         "v_ach": v_ach_list,
+                        "p_ee_target": [float(x) for x in p_ee_target.tolist()]
+                        if self._pose_tracking_enable and not self._fixed_target_mode
+                        else None,
+                        "p_ee_current": [float(x) for x in p_ee_current.tolist()]
+                        if self._pose_tracking_enable and not self._fixed_target_mode
+                        else None,
+                        "pose_position_error": [float(x) for x in pose_position_error.tolist()]
+                        if self._pose_tracking_enable and not self._fixed_target_mode
+                        else None,
                         "obj": float(res.info.obj_val) if hasattr(res, "info") else None,
                     },
                 )

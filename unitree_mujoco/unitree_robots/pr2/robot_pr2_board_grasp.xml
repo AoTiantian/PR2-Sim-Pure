@@ -337,7 +337,7 @@
                                   <joint name="l_gripper_l_finger_tip_joint" pos="0 0 0" axis="0 0 -1" range="0 0.548" actuatorfrcrange="-1000 1000" damping="0.001"/>
                                   <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0 0.8 0 1" mesh="l_finger_tip"/>
                                   <geom type="mesh" rgba="0 0.8 0 1" mesh="l_finger_tip"/>
-	                                  <geom name="l_gripper_l_board_contact" type="box" pos="0.022 0.002 0" size="0.018 0.006 0.030" contype="8" conaffinity="8" condim="4" friction="2.5 0.03 0.003" solref="0.004 1" solimp="0.90 0.99 0.001" rgba="0.1 0.8 0.1 0.35"/>
+	                                  <geom name="l_gripper_l_board_contact" type="box" pos="0.022 0.002 0" size="0.018 0.020 0.030" contype="0" conaffinity="0" condim="4" friction="2.5 0.03 0.003" solref="0.004 1" solimp="0.90 0.99 0.001" rgba="0.1 0.8 0.1 0.35"/>
                                 </body>
                               </body>
                               <body name="l_gripper_r_finger_link" pos="0.07691 -0.01 0">
@@ -350,7 +350,7 @@
                                   <joint name="l_gripper_r_finger_tip_joint" pos="0 0 0" axis="0 0 1" range="0 0.548" actuatorfrcrange="-1000 1000" damping="0.001"/>
                                   <geom quat="0 1 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0 0.8 0 1" mesh="l_finger_tip"/>
                                   <geom quat="0 1 0 0" type="mesh" rgba="0 0.8 0 1" mesh="l_finger_tip"/>
-	                                  <geom name="l_gripper_r_board_contact" type="box" pos="0.022 -0.002 0" size="0.018 0.006 0.030" contype="8" conaffinity="8" condim="4" friction="2.5 0.03 0.003" solref="0.004 1" solimp="0.90 0.99 0.001" rgba="0.1 0.8 0.1 0.35"/>
+	                                  <geom name="l_gripper_r_board_contact" type="box" pos="0.062 -0.007 0" size="0.018 0.009 0.030" contype="0" conaffinity="0" condim="4" friction="2.5 0.03 0.003" solref="0.004 1" solimp="0.90 0.99 0.001" rgba="0.1 0.8 0.1 0.35"/>
                                   <body name="l_gripper_l_finger_tip_frame">
                                     <inertial pos="0 0 0" mass="0.001" diaginertia="1e-06 1e-06 1e-06"/>
                                     <joint name="l_gripper_joint" pos="0 0 0" axis="0 1 0" type="slide" range="0 0.09" actuatorfrcrange="-1000 1000" damping="10"/>
