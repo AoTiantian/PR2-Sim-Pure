@@ -1,0 +1,57 @@
+schema_version: 1
+
+experiment:
+  settle_sec: 2.0
+  tracking_sec: 12.0
+  hold_sec: 1.0
+  publish_rate_hz: 50.0
+  output_root: /workspace/results/transport_comparison
+  frame_id: odom
+  human_hand_offset: [1.0, 0.0, 0.0]
+
+trajectory:
+  cycles: 1.0
+  position_amplitude_m: [0.20, 0.12, 0.03]
+  orientation_amplitude_rad: [0.08, 0.06, 0.10]
+
+human_impedance:
+  linear_stiffness: [100.0, 100.0, 400.0]
+  linear_damping: [15.0, 15.0, 10.0]
+  angular_stiffness: [100.0, 400.0, 100.0]
+  angular_damping: [0.5, 10.0, 5.0]
+  force_limit: [60.0, 60.0, 60.0]
+  task_torque_limit: [60.0, 60.0, 60.0]
+
+models:
+  human_only: /workspace/unitree_mujoco/unitree_robots/pr2/scene_human_board.xml
+  human_robot: /workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml
+
+robot:
+  initial_qpos_json: >-
+    {"l_shoulder_pan_joint": 0.11735056,
+     "l_shoulder_lift_joint": 0.69968519,
+     "l_upper_arm_roll_joint": 0.00321579,
+     "l_elbow_flex_joint": -1.38673805,
+     "l_forearm_roll_joint": -1.78800816,
+     "l_wrist_flex_joint": -1.31706743,
+     "l_wrist_roll_joint": 2.28528285,
+     "l_gripper_l_finger_joint": 0.52,
+     "l_gripper_r_finger_joint": 0.52,
+     "l_gripper_l_finger_tip_joint": 0.52,
+     "l_gripper_r_finger_tip_joint": 0.52}
+  ctc_kp: 1000.0
+  ctc_kd: 200.0
+  admittance:
+    mass_linear: [5.0, 5.0, 5.0]
+    damping_linear: [80.0, 80.0, 120.0]
+    stiffness_linear: [0.0, 0.0, 0.0]
+    mass_angular: [0.5, 0.5, 0.5]
+    damping_angular: [80.0, 80.0, 80.0]
+    # The public QP defines its angular displacement with the opposite sign
+    # to its -K*dx term.  Zero avoids a non-physical negative spring while
+    # retaining pure mass-damper angular admittance.
+    stiffness_angular: [0.0, 0.0, 0.0]
+    max_linear_velocity: [0.25, 0.25, 0.10]
+    max_angular_velocity: [0.10, 0.10, 0.10]
+    wrench_lpf_alpha: 0.06
+    cmd_vel_lpf_alpha: 0.10
