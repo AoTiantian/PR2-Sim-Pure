@@ -142,6 +142,11 @@ def main() -> None:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
+    except RuntimeError:
+        # The recorder shuts the shared ROS context down after saving the run;
+        # Jazzy may surface that normal launch shutdown as a take_message race.
+        if node.context.ok():
+            raise
     finally:
         if node.context.ok():
             node.destroy_node()
