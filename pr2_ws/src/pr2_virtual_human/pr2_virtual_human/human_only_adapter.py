@@ -21,7 +21,7 @@ from .comparison_ros import (
 from .experiment_state import ExperimentState, ExperimentStateMachine
 from .human_impedance_6d import HumanImpedance6D, wrench_at_body_com
 from .spatial import quaternion_to_matrix
-from .trajectory_6d import Trajectory6D
+from .trajectory_6d import Trajectory6D, WaypointTrajectory6D, build_trajectory
 
 
 class HumanOnlyAdapter(Node):
@@ -43,7 +43,7 @@ class HumanOnlyAdapter(Node):
         self.use_viewer = bool(self.get_parameter("use_viewer").value)
         self.machine = ExperimentStateMachine(self.config.timing)
         self.impedance = HumanImpedance6D(self.config.human_impedance)
-        self.trajectory: Trajectory6D | None = None
+        self.trajectory: Trajectory6D | WaypointTrajectory6D | None = None
         self.hand_velocity = np.zeros(3)
         self.angular_velocity = np.zeros(3)
         self.body_velocity = np.zeros(6)
@@ -110,7 +110,7 @@ class HumanOnlyAdapter(Node):
             # the robot condition's first TRACK sample.
             self.last_publish_time = -np.inf
         if self.machine.reference_latch_requested:
-            self.trajectory = Trajectory6D(self.config.trajectory, hand_position, quaternion)
+            self.trajectory = build_trajectory(self.config.trajectory, hand_position, quaternion)
         assert self.trajectory is not None
         target = self.trajectory.sample(self.machine.trajectory_time(float(self.data.time)))
         wrench = self.impedance.evaluate(

@@ -26,7 +26,7 @@ from .comparison_ros import (
 )
 from .experiment_state import ExperimentState
 from .spatial import matrix_to_rotvec, quaternion_to_matrix
-from .trajectory_6d import Trajectory6D
+from .trajectory_6d import Trajectory6D, WaypointTrajectory6D, build_trajectory
 from .run_plotting import save_run_plots
 
 
@@ -54,7 +54,7 @@ class ComparisonRecorder(Node):
         self.saved = False
         self.last_record_time = -np.inf
         self.record_period = 1.0 / self.config.publish_rate_hz
-        self.record_trajectory: Trajectory6D | None = None
+        self.record_trajectory: Trajectory6D | WaypointTrajectory6D | None = None
 
         self.create_subscription(PoseStamped, ACTUAL_HAND_POSE_TOPIC, lambda msg: self._store("actual", msg), 20)
         self.create_subscription(PoseStamped, DESIRED_HAND_POSE_TOPIC, lambda msg: self._store("desired", msg), 20)
@@ -109,7 +109,7 @@ class ComparisonRecorder(Node):
         actual_p, actual_q = pose_arrays(self.latest["actual"])
         desired_p, desired_q = pose_arrays(self.latest["desired"])
         if self.record_trajectory is None:
-            self.record_trajectory = Trajectory6D(
+            self.record_trajectory = build_trajectory(
                 self.config.trajectory, desired_p, desired_q
             )
         trajectory_time = (
@@ -158,7 +158,7 @@ class ComparisonRecorder(Node):
         if self.saved or not self.rows:
             return None
         run_id = datetime.now().strftime("run_%Y%m%d_%H%M%S")
-        run_dir = Path(self.output_root) / self.experiment_id / self.condition / run_id
+        run_dir = Path(self.output_root) / run_id
         run_dir.mkdir(parents=True, exist_ok=False)
         csv_path = run_dir / "history.csv"
         with csv_path.open("w", newline="", encoding="utf-8") as stream:

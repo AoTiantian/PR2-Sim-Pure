@@ -18,7 +18,7 @@ from .comparison_ros import (
 from .experiment_state import ExperimentState, ExperimentStateMachine
 from .human_impedance_6d import HumanImpedance6D
 from .spatial import orientation_error_world, quaternion_to_matrix
-from .trajectory_6d import Trajectory6D
+from .trajectory_6d import Trajectory6D, WaypointTrajectory6D, build_trajectory
 
 
 class HumanRobotController(Node):
@@ -35,7 +35,7 @@ class HumanRobotController(Node):
         self.config = load_comparison_config(config_path)
         self.machine = ExperimentStateMachine(self.config.timing)
         self.impedance = HumanImpedance6D(self.config.human_impedance)
-        self.trajectory: Trajectory6D | None = None
+        self.trajectory: Trajectory6D | WaypointTrajectory6D | None = None
         self.hand_pose: PoseStamped | None = None
         self.hand_pose_is_new = False
         self.board_pose: PoseStamped | None = None
@@ -94,7 +94,7 @@ class HumanRobotController(Node):
         self.last_sim_time = now
         state = self.machine.update(now, self.contract_valid)
         if self.machine.reference_latch_requested:
-            self.trajectory = Trajectory6D(self.config.trajectory, position, quaternion)
+            self.trajectory = build_trajectory(self.config.trajectory, position, quaternion)
         if self.trajectory is None:
             self._publish_zero_state(now, position, quaternion)
             return

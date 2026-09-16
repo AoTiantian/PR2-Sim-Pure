@@ -24,6 +24,7 @@ def _build(context):
     output_root = LaunchConfiguration("output_root")
     human_only_model_override = LaunchConfiguration("human_only_model_path").perform(context)
     human_robot_model_override = LaunchConfiguration("human_robot_model_path").perform(context)
+    robot_cmd_rate_hz = float(LaunchConfiguration("robot_cmd_rate_hz").perform(context))
     if condition not in ("human_only", "human_robot"):
         raise RuntimeError("condition must be human_only or human_robot")
     if robot_mode != "admittance":
@@ -32,7 +33,14 @@ def _build(context):
         config = yaml.safe_load(stream)
     experiment = config["experiment"]
     robot = config["robot"]
-    admittance = robot["admittance"]
+    # Scenario presets (trajectory.active) may override robot capability
+    # limits (e.g. max_angular_velocity for in-place turns).
+    trajectory_cfg = config.get("trajectory", {})
+    active_scenario = str(trajectory_cfg.get("active", "sinusoid"))
+    scenario_overrides = (
+        trajectory_cfg.get("presets", {}).get(active_scenario, {}).get("robot_overrides", {})
+    )
+    admittance = {**robot["admittance"], **scenario_overrides}
 
     recorder = Node(
         package="pr2_virtual_human",
@@ -150,7 +158,13 @@ def _build(context):
         executable="pr2_wbc_coordinator",
         name="pr2_wbc_coordinator",
         output="both",
-        parameters=[{"nullspace_enable": False}],
+        parameters=[
+            {"nullspace_enable": False},
+            # Motion-command interface rate (cmd_vel + joint_commands). The QP
+            # feedback loop stays at its own rate_hz; this only throttles the
+            # command stream re-published to the sim (default 100 = baseline).
+            {"publish_rate_hz": float(robot_cmd_rate_hz)},
+        ],
     )
     controller = Node(
         package="pr2_virtual_human",
@@ -186,5 +200,8 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("output_root", default_value=""),
         DeclareLaunchArgument("human_only_model_path", default_value=""),
         DeclareLaunchArgument("human_robot_model_path", default_value=""),
+        # Motion-command interface rate (coordinator republish of cmd_vel /
+        # joint_commands). Default 100 keeps the baseline behavior unchanged.
+        DeclareLaunchArgument("robot_cmd_rate_hz", default_value="100"),
         OpaqueFunction(function=_build),
     ])

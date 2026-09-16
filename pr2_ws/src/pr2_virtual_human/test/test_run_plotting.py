@@ -23,15 +23,19 @@ def _rows(condition: str) -> list[dict[str, float | str]]:
     return result
 
 
-def test_each_run_generates_trajectory_and_human_wrench_plots(tmp_path: Path) -> None:
+def test_each_run_generates_exactly_two_plots(tmp_path: Path) -> None:
     paths = save_run_plots(_rows("human_only"), "human_only", tmp_path)
     assert {path.name for path in paths} == {
         "trajectory_6d.png",
-        "human_applied_wrench_6d.png",
+        "wrench_6d.png",
     }
     assert all(path.stat().st_size > 0 for path in paths)
 
 
-def test_robot_run_also_generates_measured_wrench_plot(tmp_path: Path) -> None:
+def test_robot_run_overlays_robot_wrench_in_same_plot(tmp_path: Path) -> None:
     paths = save_run_plots(_rows("human_robot"), "human_robot", tmp_path)
-    assert "robot_measured_wrench_6d.png" in {path.name for path in paths}
+    assert {path.name for path in paths} == {
+        "trajectory_6d.png",
+        "wrench_6d.png",
+    }
+    assert all(path.stat().st_size > 0 for path in paths)

@@ -5,19 +5,43 @@ experiment:
   tracking_sec: 12.0
   hold_sec: 1.0
   publish_rate_hz: 50.0
-  output_root: /workspace/results/transport_comparison
+  output_root: /workspace/results/runs
   frame_id: odom
   human_hand_offset: [1.0, 0.0, 0.0]
 
 trajectory:
-  cycles: 1.0
-  position_amplitude_m: [0.20, 0.12, 0.03]
-  orientation_amplitude_rad: [0.08, 0.06, 0.10]
+  active: sinusoid
+  presets:
+    sinusoid:
+      cycles: 1.0
+      position_amplitude_m: [0.20, 0.12, 0.03]
+      orientation_amplitude_rad: [0.08, 0.06, 0.10]
+    # Waypoint scenarios follow Zhang et al. 2026 (arXiv:2603.03768) scene
+    # geometry at reduced scale.  Waypoint rows are [dx, dy, yaw_deg] in the
+    # latched anchor's world frame; segment durations must sum to tracking_sec.
+    S11:
+      tracking_sec: 12.0
+      waypoints: [[0, 0, 0], [0, -0.8, 0]]
+    S22:
+      tracking_sec: 24.0
+      waypoints: [[0, 0, 0], [0.3, -0.5, 0], [-0.3, -1.0, 0]]
+    S12:
+      tracking_sec: 22.0
+      waypoints: [[0, 0, 0], [0, -0.6, 0], [0, -0.6, 180]]
+      segment_durations_sec: [10.0, 12.0]
+      robot_overrides:
+        max_angular_velocity: [0.3, 0.3, 0.4]
 
 human_impedance:
   linear_stiffness: [100.0, 100.0, 400.0]
   linear_damping: [15.0, 15.0, 10.0]
-  angular_stiffness: [100.0, 400.0, 100.0]
+  # X stiffness 100->30: the roll-about-long-axis mode is discretely
+  # marginal at the 500 Hz rate (damping cap ~2*I/T with tiny I), so more
+  # damping self-excites it.  Lowering K raises zeta (~0.19 -> ~0.35),
+  # moves the mode away from the delay boundary, and cuts error-to-torque
+  # excitation 3x; the axis carries ~zero steady torque so tracking cost
+  # is negligible at trajectory bandwidths.
+  angular_stiffness: [30.0, 400.0, 100.0]
   angular_damping: [0.5, 10.0, 5.0]
   force_limit: [60.0, 60.0, 60.0]
   task_torque_limit: [60.0, 60.0, 60.0]
