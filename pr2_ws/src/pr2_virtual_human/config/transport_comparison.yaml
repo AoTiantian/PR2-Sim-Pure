@@ -26,9 +26,13 @@ trajectory:
       tracking_sec: 24.0
       waypoints: [[0, 0, 0], [0.3, -0.5, 0], [-0.3, -1.0, 0]]
     S12:
+      # 180 deg turnaround, kinematically consistent: the hand sits 1.0 m
+      # from the board CoM, so pivoting the board by theta sweeps the hand
+      # along a radius-1.0 m semicircle (yaw tracks the arc parameter).
+      # Waypoints: COM=(anchor+[-1,0]), hand(t)=COM+1.0*[cos t, sin t].
       tracking_sec: 22.0
-      waypoints: [[0, 0, 0], [0, -0.6, 0], [0, -0.6, 180]]
-      segment_durations_sec: [10.0, 12.0]
+      waypoints: [[0, 0, 0], [-0.293, 0.707, 45], [-1.0, 1.0, 90], [-1.707, 0.707, 135], [-2.0, 0.0, 180]]
+      segment_durations_sec: [5.0, 6.0, 6.0, 5.0]
       robot_overrides:
         max_angular_velocity: [0.3, 0.3, 0.4]
 
