@@ -45,7 +45,10 @@ human_impedance:
   # moves the mode away from the delay boundary, and cuts error-to-torque
   # excitation 3x; the axis carries ~zero steady torque so tracking cost
   # is negligible at trajectory bandwidths.
-  angular_stiffness: [30.0, 400.0, 100.0]
+  # X stiffness temporarily back to 100 to replicate the cmd10hz-era
+  # configuration (see angular_stiffness note below for why it was lowered
+  # to 30 and when to prefer which value).
+  angular_stiffness: [100.0, 400.0, 100.0]
   angular_damping: [0.5, 10.0, 5.0]
   force_limit: [60.0, 60.0, 60.0]
   task_torque_limit: [60.0, 60.0, 60.0]

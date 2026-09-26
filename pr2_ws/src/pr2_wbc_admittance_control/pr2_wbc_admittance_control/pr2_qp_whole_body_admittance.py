@@ -183,6 +183,10 @@ class Pr2QpWholeBodyAdmittance(Node):
 
         self.declare_parameter("rate_hz", 100.0)
         self.declare_parameter("wrench_lpf_alpha", 0.15)
+        # Emulate a force sensor that reports at a lower rate than the control
+        # loop: new wrench samples are accepted at most at this rate (ZOH).
+        # 0.0 (= or >= loop rate) keeps the default full-rate sensing.
+        self.declare_parameter("wrench_update_rate_hz", 0.0)
 
         self.declare_parameter("damping_linear", [320.0, 320.0, 400.0])
         self.declare_parameter("stiffness_linear", [260.0, 260.0, 320.0])
@@ -312,6 +316,10 @@ class Pr2QpWholeBodyAdmittance(Node):
 
         hz = float(self.get_parameter("rate_hz").value)
         self._dt = 1.0 / max(hz, 1.0)
+
+        wrench_hz = float(self.get_parameter("wrench_update_rate_hz").value)
+        self._wrench_min_interval = 1.0 / wrench_hz if wrench_hz > 0.0 else 0.0
+        self._last_wrench_accept_mono: Optional[float] = None
 
         self._alpha = float(self.get_parameter("wrench_lpf_alpha").value)
         self._alpha = _clamp(self._alpha, 0.0, 1.0)
@@ -456,6 +464,16 @@ class Pr2QpWholeBodyAdmittance(Node):
         )
 
     def _cb_wrench(self, msg: WrenchStamped) -> None:
+        # Measurement-rate limit: hold the last accepted sample between
+        # updates when wrench_update_rate_hz is below the topic rate.
+        if self._wrench_min_interval > 0.0:
+            now = time.monotonic()
+            if (
+                self._last_wrench_accept_mono is not None
+                and now - self._last_wrench_accept_mono < self._wrench_min_interval
+            ):
+                return
+            self._last_wrench_accept_mono = now
         self._latest_wrench = msg
 
     def _cb_pose(self, msg: PoseStamped) -> None:

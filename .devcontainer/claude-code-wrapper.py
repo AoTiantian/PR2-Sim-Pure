@@ -19,6 +19,22 @@ import sys
 CC_SWITCH_DB = Path("/home/user/.cc-switch/cc-switch.db")
 EXTENSIONS_DIR = Path("/home/user/.vscode-server/extensions")
 
+# Provider-agnostic launch variables that older setups may have left in the
+# surrounding environment.  Whatever the provider does not set explicitly is
+# stripped so a previous provider's model mapping can never leak through.
+STALE_KEYS = (
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+    "CLAUDE_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+    "CLAUDE_CODE_EFFORT_LEVEL",
+)
+
 
 def _provider_config() -> tuple[str, dict[str, str]]:
     if not CC_SWITCH_DB.is_file():
@@ -86,6 +102,9 @@ def main() -> int:
 
     environment = os.environ.copy()
     environment.update(provider_env)
+    for key in STALE_KEYS:
+        if key not in provider_env:
+            environment.pop(key, None)
     # This is useful for DeepSeek-compatible endpoints and is harmless for
     # providers that do not use the optional tool-search path.
     environment.setdefault("CLAUDE_CODE_ENTRYPOINT", "claude-vscode")

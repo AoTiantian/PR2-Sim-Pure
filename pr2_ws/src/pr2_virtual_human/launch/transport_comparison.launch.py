@@ -25,6 +25,7 @@ def _build(context):
     human_only_model_override = LaunchConfiguration("human_only_model_path").perform(context)
     human_robot_model_override = LaunchConfiguration("human_robot_model_path").perform(context)
     robot_cmd_rate_hz = float(LaunchConfiguration("robot_cmd_rate_hz").perform(context))
+    robot_wrench_rate_hz = float(LaunchConfiguration("robot_wrench_rate_hz").perform(context))
     if condition not in ("human_only", "human_robot"):
         raise RuntimeError("condition must be human_only or human_robot")
     if robot_mode != "admittance":
@@ -125,6 +126,7 @@ def _build(context):
         parameters=[
             {"model_path": model_path},
             {"input_wrench_topic": "mujoco/left_wrist_wrench"},
+            {"wrench_update_rate_hz": robot_wrench_rate_hz},
             {"ee_pose_topic": "ee_pose"},
             {"odom_topic": "odom"},
             {"state_joint_topic": "state/joint_states"},
@@ -201,7 +203,12 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("human_only_model_path", default_value=""),
         DeclareLaunchArgument("human_robot_model_path", default_value=""),
         # Motion-command interface rate (coordinator republish of cmd_vel /
-        # joint_commands). Default 100 keeps the baseline behavior unchanged.
-        DeclareLaunchArgument("robot_cmd_rate_hz", default_value="100"),
+        # joint_commands).  Default 10 Hz per 2026-09 decision: the QP
+        # feedback loop still runs at rate_hz, only the command stream to the
+        # sim is throttled.
+        DeclareLaunchArgument("robot_cmd_rate_hz", default_value="10"),
+        # Force-sensor measurement rate at the QP (ZOH between updates).
+        # Default 100 keeps the baseline behavior unchanged.
+        DeclareLaunchArgument("robot_wrench_rate_hz", default_value="100"),
         OpaqueFunction(function=_build),
     ])
