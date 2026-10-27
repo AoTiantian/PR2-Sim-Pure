@@ -1,0 +1,15 @@
+mode: waypoints
+duration_sec: 24.0
+waypoints:
+- - 0.0
+  - 0.0
+  - 0.0
+- - 0.3
+  - -0.5
+  - 0.0
+- - -0.3
+  - -1.0
+  - 0.0
+position_feedback_gain: 0.0
+max_planar_speed: 0.25
+max_yaw_speed: 0.1

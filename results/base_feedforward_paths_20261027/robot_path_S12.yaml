@@ -1,0 +1,30 @@
+mode: waypoints
+duration_sec: 22.0
+waypoints:
+- - 0.0
+  - 0.0
+  - 0.0
+- - -0.293
+  - 0.707
+  - 45.0
+- - -1.0
+  - 1.0
+  - 90.0
+- - -1.707
+  - 0.707
+  - 135.0
+- - -2.0
+  - 0.0
+  - 180.0
+segment_durations_sec:
+- 5.0
+- 6.0
+- 6.0
+- 5.0
+reference_to_base_offset_world_m:
+- -2.395
+- 0.65
+- 0.0
+position_feedback_gain: 0.0
+max_planar_speed: 0.25
+max_yaw_speed: 0.1

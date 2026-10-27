@@ -1,0 +1,434 @@
+{
+  "S11": {
+    "passive": {
+      "attempts": 3,
+      "with_history": 3,
+      "completed": 3,
+      "ended_grasping": 3,
+      "hand_xy_rmse_cm": {
+        "mean": 5.451520929003908,
+        "min": 5.367283801983193,
+        "max": 5.569948840341868
+      },
+      "human_xy_force_rms_N": {
+        "mean": 5.464182938586457,
+        "min": 5.370268597814794,
+        "max": 5.57998332519212
+      },
+      "attitude_peak_deg": {
+        "mean": 8.923104403528649,
+        "min": 8.74069728968818,
+        "max": 9.13032872169601
+      },
+      "attitude_rms_deg": {
+        "mean": 6.460970176440415,
+        "min": 6.346551220757387,
+        "max": 6.567346412027687
+      },
+      "peak_roll_deg": {
+        "mean": 0.4388255409415111,
+        "min": 0.4270251671356053,
+        "max": 0.452980027417782
+      },
+      "peak_pitch_deg": {
+        "mean": 2.782594196407461,
+        "min": 2.6053838328442773,
+        "max": 2.942691618623496
+      },
+      "peak_board_tilt_deg": {
+        "mean": 2.783670461977897,
+        "min": 2.6065670076135876,
+        "max": 2.94340006186009
+      },
+      "final_yaw_error_deg": {
+        "mean": 4.936597285461715,
+        "min": 4.863212644111394,
+        "max": 4.996359064490248
+      },
+      "human_task_torque_rms_Nm": {
+        "mean": 21.428044728217326,
+        "min": 20.524073453022627,
+        "max": 22.095145399846974
+      },
+      "human_mean_vertical_force_N": {
+        "mean": 18.31417801773732,
+        "min": 17.800508919990268,
+        "max": 18.74921350332465
+      },
+      "both_contact_fraction": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "human_force_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "human_torque_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "active": {
+      "attempts": 3,
+      "with_history": 3,
+      "completed": 3,
+      "ended_grasping": 3,
+      "hand_xy_rmse_cm": {
+        "mean": 0.8461774104421487,
+        "min": 0.7840103266453119,
+        "max": 0.9474816498002797
+      },
+      "human_xy_force_rms_N": {
+        "mean": 0.8983727279168301,
+        "min": 0.8283828146943895,
+        "max": 1.0034456991098877
+      },
+      "attitude_peak_deg": {
+        "mean": 3.25090762551426,
+        "min": 3.1185819742081993,
+        "max": 3.498826470377994
+      },
+      "attitude_rms_deg": {
+        "mean": 2.91066614310558,
+        "min": 2.8891615644058133,
+        "max": 2.9223730717054925
+      },
+      "peak_roll_deg": {
+        "mean": 0.3013759128402054,
+        "min": 0.28961271706028807,
+        "max": 0.3113195673682972
+      },
+      "peak_pitch_deg": {
+        "mean": 2.8952360199724905,
+        "min": 2.806617821100938,
+        "max": 2.9503438266384157
+      },
+      "peak_board_tilt_deg": {
+        "mean": 2.8963141149736735,
+        "min": 2.8080551508935665,
+        "max": 2.9511114353808305
+      },
+      "final_yaw_error_deg": {
+        "mean": -0.20547749258383322,
+        "min": -0.38129327806928115,
+        "max": 0.07559975592225375
+      },
+      "human_task_torque_rms_Nm": {
+        "mean": 19.513230669409264,
+        "min": 19.147519757223808,
+        "max": 19.69638126564441
+      },
+      "human_mean_vertical_force_N": {
+        "mean": 18.620330019458475,
+        "min": 18.414837796937686,
+        "max": 18.725463216152917
+      },
+      "both_contact_fraction": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "human_force_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "human_torque_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "sinusoid": {
+    "passive": {
+      "attempts": 3,
+      "with_history": 3,
+      "completed": 3,
+      "ended_grasping": 3,
+      "hand_xy_rmse_cm": {
+        "mean": 7.123875526788917,
+        "min": 6.941421528261412,
+        "max": 7.2744250916352895
+      },
+      "human_xy_force_rms_N": {
+        "mean": 7.200162736675471,
+        "min": 7.005813786462151,
+        "max": 7.356203243562644
+      },
+      "attitude_peak_deg": {
+        "mean": 8.761090055375236,
+        "min": 8.589641214018593,
+        "max": 8.913617875689017
+      },
+      "attitude_rms_deg": {
+        "mean": 4.4708879903389755,
+        "min": 4.406128374567422,
+        "max": 4.536093603913004
+      },
+      "peak_roll_deg": {
+        "mean": 3.39878438629302,
+        "min": 3.3751438857046585,
+        "max": 3.4335657959328034
+      },
+      "peak_pitch_deg": {
+        "mean": 4.59345824884823,
+        "min": 4.39166512003505,
+        "max": 4.737914651997851
+      },
+      "peak_board_tilt_deg": {
+        "mean": 4.736608538233284,
+        "min": 4.543470081463428,
+        "max": 4.878456150038186
+      },
+      "final_yaw_error_deg": {
+        "mean": 0.5269989450345401,
+        "min": 0.40221732939063065,
+        "max": 0.6346905170358459
+      },
+      "human_task_torque_rms_Nm": {
+        "mean": 22.178878177699715,
+        "min": 21.420321316089037,
+        "max": 22.670347485274302
+      },
+      "human_mean_vertical_force_N": {
+        "mean": 18.307861930649164,
+        "min": 17.82746906730984,
+        "max": 18.580519420669802
+      },
+      "both_contact_fraction": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "human_force_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "human_torque_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "active": {
+      "attempts": 3,
+      "with_history": 3,
+      "completed": 3,
+      "ended_grasping": 3,
+      "hand_xy_rmse_cm": {
+        "mean": 3.0445996090599237,
+        "min": 2.6024234393153582,
+        "max": 3.6106066900938933
+      },
+      "human_xy_force_rms_N": {
+        "mean": 3.121238200577089,
+        "min": 2.678839617969071,
+        "max": 3.698540076416369
+      },
+      "attitude_peak_deg": {
+        "mean": 6.40381427049551,
+        "min": 6.129590186573319,
+        "max": 6.692283760062683
+      },
+      "attitude_rms_deg": {
+        "mean": 4.203950579839429,
+        "min": 4.121360127797703,
+        "max": 4.301036698141889
+      },
+      "peak_roll_deg": {
+        "mean": 3.347697885192788,
+        "min": 3.311770043223781,
+        "max": 3.3670781855701373
+      },
+      "peak_pitch_deg": {
+        "mean": 4.791199027143858,
+        "min": 4.757251400364144,
+        "max": 4.817224263682813
+      },
+      "peak_board_tilt_deg": {
+        "mean": 5.015093578138827,
+        "min": 4.966329590922202,
+        "max": 5.056531519097985
+      },
+      "final_yaw_error_deg": {
+        "mean": 1.1506153305533575,
+        "min": 1.0826536095320451,
+        "max": 1.187054885445496
+      },
+      "human_task_torque_rms_Nm": {
+        "mean": 22.45477079537673,
+        "min": 22.30642316688051,
+        "max": 22.69250907698858
+      },
+      "human_mean_vertical_force_N": {
+        "mean": 18.43523341385643,
+        "min": 18.312528459519186,
+        "max": 18.622316909454007
+      },
+      "both_contact_fraction": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "human_force_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "human_torque_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "S12": {
+    "passive": {
+      "attempts": 3,
+      "with_history": 3,
+      "completed": 3,
+      "ended_grasping": 3,
+      "hand_xy_rmse_cm": {
+        "mean": 4.851167330152012,
+        "min": 3.678798953983256,
+        "max": 6.673101505659214
+      },
+      "human_xy_force_rms_N": {
+        "mean": 4.9952316888113755,
+        "min": 3.8176828022991325,
+        "max": 6.808089083938975
+      },
+      "attitude_peak_deg": {
+        "mean": 13.329615707216798,
+        "min": 11.296881163088836,
+        "max": 15.716835033023683
+      },
+      "attitude_rms_deg": {
+        "mean": 7.646004105605091,
+        "min": 6.742295587714778,
+        "max": 9.22795775294815
+      },
+      "peak_roll_deg": {
+        "mean": 3.645683542437992,
+        "min": 2.6792800149626412,
+        "max": 5.545696061272167
+      },
+      "peak_pitch_deg": {
+        "mean": 2.5318672379262765,
+        "min": 1.6969216366442104,
+        "max": 2.9577114573955576
+      },
+      "peak_board_tilt_deg": {
+        "mean": 4.403943946786117,
+        "min": 3.8057947288076925,
+        "max": 5.548293380396654
+      },
+      "final_yaw_error_deg": {
+        "mean": 0.9396646121763418,
+        "min": 0.23146792904110144,
+        "max": 1.6210913955493924
+      },
+      "human_task_torque_rms_Nm": {
+        "mean": 19.264262776555114,
+        "min": 11.978669036767254,
+        "max": 24.239959771450525
+      },
+      "human_mean_vertical_force_N": {
+        "mean": 14.058271652157027,
+        "min": 5.79903134672392,
+        "max": 18.208538648576912
+      },
+      "both_contact_fraction": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "human_force_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "human_torque_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "active": {
+      "attempts": 3,
+      "with_history": 3,
+      "completed": 3,
+      "ended_grasping": 3,
+      "hand_xy_rmse_cm": {
+        "mean": 1.9321392234362091,
+        "min": 1.730840279790547,
+        "max": 2.2344073564138474
+      },
+      "human_xy_force_rms_N": {
+        "mean": 2.0122806134144358,
+        "min": 1.7959797102529844,
+        "max": 2.325163585490025
+      },
+      "attitude_peak_deg": {
+        "mean": 12.068106684826,
+        "min": 8.996465392461735,
+        "max": 15.182910526707444
+      },
+      "attitude_rms_deg": {
+        "mean": 4.434396488982475,
+        "min": 3.4249660085590863,
+        "max": 5.365517777144731
+      },
+      "peak_roll_deg": {
+        "mean": 11.203497436952995,
+        "min": 8.672385997030128,
+        "max": 14.105968728555004
+      },
+      "peak_pitch_deg": {
+        "mean": 3.6050719314067803,
+        "min": 2.3968976324134252,
+        "max": 4.4786718694798235
+      },
+      "peak_board_tilt_deg": {
+        "mean": 11.76493340638097,
+        "min": 8.995079245993896,
+        "max": 14.785795402328537
+      },
+      "final_yaw_error_deg": {
+        "mean": -2.876017505497888,
+        "min": -3.822397351161026,
+        "max": -1.9355307015252932
+      },
+      "human_task_torque_rms_Nm": {
+        "mean": 17.988908171000638,
+        "min": 12.33200224739979,
+        "max": 21.134281647516875
+      },
+      "human_mean_vertical_force_N": {
+        "mean": 17.574825988738908,
+        "min": 14.752750319833673,
+        "max": 19.069755191105678
+      },
+      "both_contact_fraction": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "human_force_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "human_torque_saturation_fraction": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  }
+}

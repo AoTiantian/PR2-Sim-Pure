@@ -1,0 +1,92 @@
+[
+  {
+    "tag": "S11_active_r1",
+    "task": "S11",
+    "mode": "active"
+  },
+  {
+    "tag": "S11_passive_r1",
+    "task": "S11",
+    "mode": "passive"
+  },
+  {
+    "tag": "sinusoid_active_r1",
+    "task": "sinusoid",
+    "mode": "active"
+  },
+  {
+    "tag": "sinusoid_passive_r1",
+    "task": "sinusoid",
+    "mode": "passive"
+  },
+  {
+    "tag": "S12_active_r1",
+    "task": "S12",
+    "mode": "active"
+  },
+  {
+    "tag": "S12_passive_r1",
+    "task": "S12",
+    "mode": "passive"
+  },
+  {
+    "tag": "S11_passive_r2",
+    "task": "S11",
+    "mode": "passive"
+  },
+  {
+    "tag": "S11_active_r2",
+    "task": "S11",
+    "mode": "active"
+  },
+  {
+    "tag": "sinusoid_passive_r2",
+    "task": "sinusoid",
+    "mode": "passive"
+  },
+  {
+    "tag": "sinusoid_active_r2",
+    "task": "sinusoid",
+    "mode": "active"
+  },
+  {
+    "tag": "S12_passive_r2",
+    "task": "S12",
+    "mode": "passive"
+  },
+  {
+    "tag": "S12_active_r2",
+    "task": "S12",
+    "mode": "active"
+  },
+  {
+    "tag": "S11_active_r3",
+    "task": "S11",
+    "mode": "active"
+  },
+  {
+    "tag": "S11_passive_r3",
+    "task": "S11",
+    "mode": "passive"
+  },
+  {
+    "tag": "sinusoid_active_r3",
+    "task": "sinusoid",
+    "mode": "active"
+  },
+  {
+    "tag": "sinusoid_passive_r3",
+    "task": "sinusoid",
+    "mode": "passive"
+  },
+  {
+    "tag": "S12_active_r3",
+    "task": "S12",
+    "mode": "active"
+  },
+  {
+    "tag": "S12_passive_r3",
+    "task": "S12",
+    "mode": "passive"
+  }
+]

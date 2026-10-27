@@ -1,0 +1,9 @@
+# Independent robot base reference in odom, relative to base position at TRACK.
+# The task geometry matches S22 for this first experiment; no hand-pose input.
+duration_sec: 24.0
+waypoints: [[0.0, 0.0, 0.0], [0.3, -0.5, 0.0], [-0.3, -1.0, 0.0]]
+feedforward_gain: 1.0
+# First isolate feedforward. Path-error feedback is a separate next condition.
+position_feedback_gain: 0.0
+max_planar_speed: 0.25
+max_yaw_speed: 0.10

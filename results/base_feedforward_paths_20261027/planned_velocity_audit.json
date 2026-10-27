@@ -1,0 +1,20 @@
+{
+  "S11": {
+    "peak_nominal_planar_m_s": 0.12499999999999999,
+    "peak_nominal_yaw_rad_s": 0.0,
+    "planar_clipped_fraction_tracking": 0.0,
+    "yaw_clipped_fraction_tracking": 0.0
+  },
+  "sinusoid": {
+    "peak_nominal_planar_m_s": 0.3067077875566301,
+    "peak_nominal_yaw_rad_s": 0.0,
+    "planar_clipped_fraction_tracking": 0.06346826586706647,
+    "yaw_clipped_fraction_tracking": 0.0
+  },
+  "S12": {
+    "peak_nominal_planar_m_s": 0.4624843873897036,
+    "peak_nominal_yaw_rad_s": 0.2945234630446374,
+    "planar_clipped_fraction_tracking": 0.4867566216891554,
+    "yaw_clipped_fraction_tracking": 0.6216891554222889
+  }
+}

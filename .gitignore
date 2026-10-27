@@ -37,7 +37,27 @@ Thumbs.db
 
 # --- Simulation logs & plots ---
 logs/
-/results/
+/results/*
+# Keep the feedforward prototype and compact evidence; raw run directories
+# (ROS logs, per-step debug traces, raw.npz) remain local.
+!/results/base_feedforward_20261027/
+!/results/base_feedforward_paths_20261027/
+/results/base_feedforward_20261027/*
+/results/base_feedforward_paths_20261027/*
+!/results/base_feedforward*_20261027/*.py
+!/results/base_feedforward*_20261027/*.yaml
+!/results/base_feedforward*_20261027/*.md
+!/results/base_feedforward*_20261027/*.json
+!/results/base_feedforward*_20261027/*.png
+!/results/base_feedforward*_20261027/*.pdf
+!/results/base_feedforward*_20261027/evidence/
+/results/base_feedforward*_20261027/evidence/*
+!/results/base_feedforward*_20261027/evidence/*.csv.gz
+# Read-only logger and S22 configuration used by the experiment launchers.
+!/results/friction_paths_20261026/
+/results/friction_paths_20261026/*
+!/results/friction_paths_20261026/logger.py
+!/results/friction_paths_20261026/S22.yaml
 *.csv
 
 # --- Personal screenshots / temporary images ---

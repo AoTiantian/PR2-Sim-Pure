@@ -1,0 +1,2684 @@
+{
+  "S11_active_r1": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S11.yaml",
+      "experiment_id:=S11_active_r1",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S11_active_r1"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml": "0eca4a91df5861fa7cbaa8ee8bc54c2d6a313dc4940aba7fd586c7b26e795024",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S11.yaml": "1c6323cc89256ff88bc7b60fed5f4b3940eec81058fd272bf415f2321dd3a713"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "S11",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            80.0
+          ],
+          "damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_112551/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S11_active_r1",
+      "config_sha256": "298074c48d3766c3ca63ed324533d6689825623ad90e46daf7022aab9b1a93b0",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 118693,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_112551/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001674,
+      "position_rmse_m": {
+        "x": 0.0021311291521117996,
+        "y": 0.007544899453648677,
+        "z": 0.04680622011016898
+      },
+      "orientation_rmse_rad": {
+        "x": 0.0024126656543843523,
+        "y": 0.04913136992943382,
+        "z": 0.0133567450791775
+      },
+      "human_force_rms_n": {
+        "x": 0.23803354748696623,
+        "y": 0.7934469849660842,
+        "z": 18.721572939213974
+      },
+      "human_force_peak_n": {
+        "x": 1.243818404033393,
+        "y": 2.9115639734191756,
+        "z": 19.33994213883789
+      },
+      "human_task_torque_rms_nm": {
+        "x": 0.14790216235155823,
+        "y": 19.647150631635608,
+        "z": 1.3754197712566882
+      },
+      "human_task_torque_peak_nm": {
+        "x": 0.28942934531048625,
+        "y": 20.62131313512814,
+        "z": 2.5196923023480773
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": -0.011517516560865193,
+      "human_absolute_work_j": 0.7799851606606603,
+      "all_required_values_finite": true
+    }
+  },
+  "S11_active_r2": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S11.yaml",
+      "experiment_id:=S11_active_r2",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S11_active_r2"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml": "0eca4a91df5861fa7cbaa8ee8bc54c2d6a313dc4940aba7fd586c7b26e795024",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S11.yaml": "1c6323cc89256ff88bc7b60fed5f4b3940eec81058fd272bf415f2321dd3a713"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "S11",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            80.0
+          ],
+          "damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_112937/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S11_active_r2",
+      "config_sha256": "298074c48d3766c3ca63ed324533d6689825623ad90e46daf7022aab9b1a93b0",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 120723,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_112937/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001676,
+      "position_rmse_m": {
+        "x": 0.0019293777478912842,
+        "y": 0.007836383018061166,
+        "z": 0.04682429091597863
+      },
+      "orientation_rmse_rad": {
+        "x": 0.0023254210549064265,
+        "y": 0.04912340918816522,
+        "z": 0.013527615584615096
+      },
+      "human_force_rms_n": {
+        "x": 0.19764060102665684,
+        "y": 0.8403613788493995,
+        "z": 18.726977574012718
+      },
+      "human_force_peak_n": {
+        "x": 0.3809247718738391,
+        "y": 2.6481116867301933,
+        "z": 19.475006887260086
+      },
+      "human_task_torque_rms_nm": {
+        "x": 0.15078309925821376,
+        "y": 19.646575298947273,
+        "z": 1.3916818750709519
+      },
+      "human_task_torque_peak_nm": {
+        "x": 0.3006446657531735,
+        "y": 20.478379299410197,
+        "z": 2.5409238454372822
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": -0.13991401496939343,
+      "human_absolute_work_j": 0.9682101190711496,
+      "all_required_values_finite": true
+    }
+  },
+  "S11_active_r3": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S11.yaml",
+      "experiment_id:=S11_active_r3",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S11_active_r3"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml": "0eca4a91df5861fa7cbaa8ee8bc54c2d6a313dc4940aba7fd586c7b26e795024",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S11.yaml": "1c6323cc89256ff88bc7b60fed5f4b3940eec81058fd272bf415f2321dd3a713"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "S11",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            80.0
+          ],
+          "damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113241/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S11_active_r3",
+      "config_sha256": "298074c48d3766c3ca63ed324533d6689825623ad90e46daf7022aab9b1a93b0",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 122256,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113241/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001688,
+      "position_rmse_m": {
+        "x": 0.0019062501304691977,
+        "y": 0.009281075266956526,
+        "z": 0.046041520988243316
+      },
+      "orientation_rmse_rad": {
+        "x": 0.002424436377886349,
+        "y": 0.04771445878749076,
+        "z": 0.01612983796385644
+      },
+      "human_force_rms_n": {
+        "x": 0.25690012336962076,
+        "y": 0.9700028853950924,
+        "z": 18.415708606880113
+      },
+      "human_force_peak_n": {
+        "x": 1.7061014943932422,
+        "y": 2.6683105955032205,
+        "z": 18.953533030442546
+      },
+      "human_task_torque_rms_nm": {
+        "x": 0.16758291919676516,
+        "y": 19.075900139324677,
+        "z": 1.6460445598410622
+      },
+      "human_task_torque_peak_nm": {
+        "x": 0.44384576978966106,
+        "y": 20.058836192729416,
+        "z": 3.9064617520854794
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 0.43812262689975534,
+      "human_absolute_work_j": 1.0038135337429457,
+      "all_required_values_finite": true
+    }
+  },
+  "S11_passive_r1": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S11.yaml",
+      "experiment_id:=S11_passive_r1",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S11_passive_r1"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml": "0eca4a91df5861fa7cbaa8ee8bc54c2d6a313dc4940aba7fd586c7b26e795024",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S11.yaml": "1c6323cc89256ff88bc7b60fed5f4b3940eec81058fd272bf415f2321dd3a713"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "S11",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_112618/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S11_passive_r1",
+      "config_sha256": "298074c48d3766c3ca63ed324533d6689825623ad90e46daf7022aab9b1a93b0",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 118966,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_112618/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001672,
+      "position_rmse_m": {
+        "x": 0.010049899591796536,
+        "y": 0.0532329419424466,
+        "z": 0.046878547403422004
+      },
+      "orientation_rmse_rad": {
+        "x": 0.001923985895914579,
+        "y": 0.04902489011214346,
+        "z": 0.10168838261093002
+      },
+      "human_force_rms_n": {
+        "x": 1.0176903344225174,
+        "y": 5.346297957660612,
+        "z": 18.750912023925597
+      },
+      "human_force_peak_n": {
+        "x": 3.0281424373648385,
+        "y": 8.842884370503523,
+        "z": 20.01236503899243
+      },
+      "human_task_torque_rms_nm": {
+        "x": 1.4410746732774524,
+        "y": 19.526415656673713,
+        "z": 10.239035385680852
+      },
+      "human_task_torque_peak_nm": {
+        "x": 2.0802380019661224,
+        "y": 20.54905751310649,
+        "z": 14.857461479459683
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 4.271203161109412,
+      "human_absolute_work_j": 4.447240449033002,
+      "all_required_values_finite": true
+    }
+  },
+  "S11_passive_r2": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S11.yaml",
+      "experiment_id:=S11_passive_r2",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S11_passive_r2"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml": "0eca4a91df5861fa7cbaa8ee8bc54c2d6a313dc4940aba7fd586c7b26e795024",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S11.yaml": "1c6323cc89256ff88bc7b60fed5f4b3940eec81058fd272bf415f2321dd3a713"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "S11",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_112909/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S11_passive_r2",
+      "config_sha256": "298074c48d3766c3ca63ed324533d6689825623ad90e46daf7022aab9b1a93b0",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 120453,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_112909/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001688,
+      "position_rmse_m": {
+        "x": 0.007678770066474926,
+        "y": 0.055167649022491265,
+        "z": 0.04598895879715569
+      },
+      "orientation_rmse_rad": {
+        "x": 0.0028492311474598167,
+        "y": 0.047622519746986454,
+        "z": 0.10422158441746143
+      },
+      "human_force_rms_n": {
+        "x": 0.784215743610152,
+        "y": 5.524601304790788,
+        "z": 18.395331947742633
+      },
+      "human_force_peak_n": {
+        "x": 2.2337652829010644,
+        "y": 9.165652705434274,
+        "z": 19.48403874450739
+      },
+      "human_task_torque_rms_nm": {
+        "x": 1.3809437578083712,
+        "y": 18.903762787003945,
+        "z": 10.493298011767026
+      },
+      "human_task_torque_peak_nm": {
+        "x": 2.0177075507902265,
+        "y": 20.010423456628164,
+        "z": 15.364821987421813
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 4.422943306848046,
+      "human_absolute_work_j": 4.570492739540854,
+      "all_required_values_finite": true
+    }
+  },
+  "S11_passive_r3": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S11.yaml",
+      "experiment_id:=S11_passive_r3",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S11_passive_r3"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml": "0eca4a91df5861fa7cbaa8ee8bc54c2d6a313dc4940aba7fd586c7b26e795024",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S11.yaml": "1c6323cc89256ff88bc7b60fed5f4b3940eec81058fd272bf415f2321dd3a713"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "S11",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S11.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113314/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S11_passive_r3",
+      "config_sha256": "298074c48d3766c3ca63ed324533d6689825623ad90e46daf7022aab9b1a93b0",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 122533,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113314/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001697,
+      "position_rmse_m": {
+        "x": 0.006288099268288073,
+        "y": 0.05330322080977164,
+        "z": 0.04450639997103614
+      },
+      "orientation_rmse_rad": {
+        "x": 0.004131897564039557,
+        "y": 0.04488098174752066,
+        "z": 0.10118410123540356
+      },
+      "human_force_rms_n": {
+        "x": 0.6427706856367348,
+        "y": 5.331663029333508,
+        "z": 17.802568115315413
+      },
+      "human_force_peak_n": {
+        "x": 2.011359516842215,
+        "y": 7.988481727846677,
+        "z": 18.642174732541417
+      },
+      "human_task_torque_rms_nm": {
+        "x": 1.2125648721361388,
+        "y": 17.77391288464002,
+        "z": 10.190941973397608
+      },
+      "human_task_torque_peak_nm": {
+        "x": 1.7844948876616546,
+        "y": 18.848085163966573,
+        "z": 14.694275085133851
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 4.265589958668351,
+      "human_absolute_work_j": 4.345594159898143,
+      "all_required_values_finite": true
+    }
+  },
+  "S12_active_r1": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S12.yaml",
+      "experiment_id:=S12_active_r1",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S12_active_r1"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml": "c6bf5e26bab6858a900eec70379b686a0fbbcbed401f89aeb1d62afd48e10f63",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S12.yaml": "86a1f9a04b9dabfd4dc9514811ca28b7b07c97b104dcd7d91deb0254557cbb12"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "S12",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            20.0
+          ],
+          "damping_linear": [
+            20.0,
+            20.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            20.0,
+            20.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.3,
+            0.3,
+            0.4
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_112757/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S12_active_r1",
+      "config_sha256": "52e93e8d328520d9897f3e5e9e760a0c8b1ac5a7af9f733eaa8aa1cffdae04d4",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 1151,
+      "sample_rate_hz": 50.0,
+      "pid": 119803,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_112757/metrics.json": {
+      "samples": 1151,
+      "duration_sec": 22.99999999999697,
+      "position_rmse_m": {
+        "x": 0.014455486801286634,
+        "y": 0.009519438468332565,
+        "z": 0.03689844457041875
+      },
+      "orientation_rmse_rad": {
+        "x": 0.04790002546907136,
+        "y": 0.023574753231720823,
+        "z": 0.02689052545990216
+      },
+      "human_force_rms_n": {
+        "x": 1.4691411367119367,
+        "y": 1.0330379664180558,
+        "z": 14.760894385055817
+      },
+      "human_force_peak_n": {
+        "x": 4.943701312589383,
+        "y": 4.348104654492658,
+        "z": 16.089962084404313
+      },
+      "human_task_torque_rms_nm": {
+        "x": 8.37941981409441,
+        "y": 8.690807370657017,
+        "z": 2.5166386818868434
+      },
+      "human_task_torque_peak_nm": {
+        "x": 12.195599101373306,
+        "y": 14.871383330610575,
+        "z": 6.856818287909389
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 14.372517844089138,
+      "human_absolute_work_j": 21.347613777775344,
+      "all_required_values_finite": true
+    }
+  },
+  "S12_active_r2": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S12.yaml",
+      "experiment_id:=S12_active_r2",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S12_active_r2"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml": "c6bf5e26bab6858a900eec70379b686a0fbbcbed401f89aeb1d62afd48e10f63",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S12.yaml": "86a1f9a04b9dabfd4dc9514811ca28b7b07c97b104dcd7d91deb0254557cbb12"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "S12",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            20.0
+          ],
+          "damping_linear": [
+            20.0,
+            20.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            20.0,
+            20.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.3,
+            0.3,
+            0.4
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113210/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S12_active_r2",
+      "config_sha256": "52e93e8d328520d9897f3e5e9e760a0c8b1ac5a7af9f733eaa8aa1cffdae04d4",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 1151,
+      "sample_rate_hz": 50.0,
+      "pid": 121920,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113210/metrics.json": {
+      "samples": 1151,
+      "duration_sec": 22.99999999999702,
+      "position_rmse_m": {
+        "x": 0.01986990820889196,
+        "y": 0.010219802894862488,
+        "z": 0.04772073108727101
+      },
+      "orientation_rmse_rad": {
+        "x": 0.07750531383528374,
+        "y": 0.03971177377181478,
+        "z": 0.03443058793580434
+      },
+      "human_force_rms_n": {
+        "x": 2.023701311022279,
+        "y": 1.144997250239291,
+        "z": 19.091575638918872
+      },
+      "human_force_peak_n": {
+        "x": 7.188677151427048,
+        "y": 6.196733045076572,
+        "z": 22.078321554169897
+      },
+      "human_task_torque_rms_nm": {
+        "x": 13.987478995677149,
+        "y": 15.564408241877848,
+        "z": 2.9593053546776913
+      },
+      "human_task_torque_peak_nm": {
+        "x": 19.927656167713547,
+        "y": 29.15052078794319,
+        "z": 8.379285026144107
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 1.2540037547326164,
+      "human_absolute_work_j": 26.74359896355456,
+      "all_required_values_finite": true
+    }
+  },
+  "S12_active_r3": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S12.yaml",
+      "experiment_id:=S12_active_r3",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S12_active_r3"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml": "c6bf5e26bab6858a900eec70379b686a0fbbcbed401f89aeb1d62afd48e10f63",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S12.yaml": "86a1f9a04b9dabfd4dc9514811ca28b7b07c97b104dcd7d91deb0254557cbb12"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "S12",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            20.0
+          ],
+          "damping_linear": [
+            20.0,
+            20.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            20.0,
+            20.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.3,
+            0.3,
+            0.4
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113504/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S12_active_r3",
+      "config_sha256": "52e93e8d328520d9897f3e5e9e760a0c8b1ac5a7af9f733eaa8aa1cffdae04d4",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 1151,
+      "sample_rate_hz": 50.0,
+      "pid": 123415,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113504/metrics.json": {
+      "samples": 1151,
+      "duration_sec": 22.999999999997016,
+      "position_rmse_m": {
+        "x": 0.016120958394622614,
+        "y": 0.008685221345422144,
+        "z": 0.047279427339301114
+      },
+      "orientation_rmse_rad": {
+        "x": 0.06271630094113216,
+        "y": 0.03648589313377763,
+        "z": 0.030640344262154433
+      },
+      "human_force_rms_n": {
+        "x": 1.6433024770882143,
+        "y": 0.9846105230984991,
+        "z": 18.913757621150136
+      },
+      "human_force_peak_n": {
+        "x": 5.667167844179502,
+        "y": 5.132889259470786,
+        "z": 20.462005702739194
+      },
+      "human_task_torque_rms_nm": {
+        "x": 13.85160142298607,
+        "y": 14.870588008634138,
+        "z": 2.6957032165719537
+      },
+      "human_task_torque_peak_nm": {
+        "x": 19.699707457097297,
+        "y": 26.062736154269842,
+        "z": 7.3869253652252995
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 9.861960294544808,
+      "human_absolute_work_j": 26.227445006298495,
+      "all_required_values_finite": true
+    }
+  },
+  "S12_passive_r1": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S12.yaml",
+      "experiment_id:=S12_passive_r1",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S12_passive_r1"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml": "c6bf5e26bab6858a900eec70379b686a0fbbcbed401f89aeb1d62afd48e10f63",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S12.yaml": "86a1f9a04b9dabfd4dc9514811ca28b7b07c97b104dcd7d91deb0254557cbb12"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "S12",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_112838/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S12_passive_r1",
+      "config_sha256": "52e93e8d328520d9897f3e5e9e760a0c8b1ac5a7af9f733eaa8aa1cffdae04d4",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 1151,
+      "sample_rate_hz": 50.0,
+      "pid": 120129,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_112838/metrics.json": {
+      "samples": 1151,
+      "duration_sec": 22.99999999999702,
+      "position_rmse_m": {
+        "x": 0.02532485283737432,
+        "y": 0.026683478093160264,
+        "z": 0.04555728509262107
+      },
+      "orientation_rmse_rad": {
+        "x": 0.04453144166532155,
+        "y": 0.03139180940462697,
+        "z": 0.10430230713614964
+      },
+      "human_force_rms_n": {
+        "x": 2.6378378697996223,
+        "y": 2.759803136388816,
+        "z": 18.222363222542853
+      },
+      "human_force_peak_n": {
+        "x": 7.5160905112233625,
+        "y": 10.137959050316436,
+        "z": 20.064371381340454
+      },
+      "human_task_torque_rms_nm": {
+        "x": 13.607411393249418,
+        "y": 13.328926124321862,
+        "z": 10.13027357005243
+      },
+      "human_task_torque_peak_nm": {
+        "x": 19.191946410965325,
+        "y": 20.630054531068392,
+        "z": 19.236923356463947
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 23.80529835143249,
+      "human_absolute_work_j": 24.665227223550662,
+      "all_required_values_finite": true
+    }
+  },
+  "S12_passive_r2": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S12.yaml",
+      "experiment_id:=S12_passive_r2",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S12_passive_r2"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml": "c6bf5e26bab6858a900eec70379b686a0fbbcbed401f89aeb1d62afd48e10f63",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S12.yaml": "86a1f9a04b9dabfd4dc9514811ca28b7b07c97b104dcd7d91deb0254557cbb12"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "S12",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113127/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S12_passive_r2",
+      "config_sha256": "52e93e8d328520d9897f3e5e9e760a0c8b1ac5a7af9f733eaa8aa1cffdae04d4",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 1151,
+      "sample_rate_hz": 50.0,
+      "pid": 121582,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113127/metrics.json": {
+      "samples": 1151,
+      "duration_sec": 22.999999999997016,
+      "position_rmse_m": {
+        "x": 0.028344641929303544,
+        "y": 0.06041199917551723,
+        "z": 0.045453915090253996
+      },
+      "orientation_rmse_rad": {
+        "x": 0.04541168315632615,
+        "y": 0.03085285149695763,
+        "z": 0.15141214992271385
+      },
+      "human_force_rms_n": {
+        "x": 2.9742568054738157,
+        "y": 6.124040613021906,
+        "z": 18.181160181359374
+      },
+      "human_force_peak_n": {
+        "x": 10.295280835856865,
+        "y": 16.567747347947304,
+        "z": 20.217244852159318
+      },
+      "human_task_torque_rms_nm": {
+        "x": 13.36703822074659,
+        "y": 13.645560372337735,
+        "z": 14.923023187394895
+      },
+      "human_task_torque_peak_nm": {
+        "x": 19.337690755656105,
+        "y": 20.669963380294508,
+        "z": 27.051827233019555
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 29.721051069117856,
+      "human_absolute_work_j": 30.734764612179525,
+      "all_required_values_finite": true
+    }
+  },
+  "S12_passive_r3": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/S12.yaml",
+      "experiment_id:=S12_passive_r3",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/S12_passive_r3"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml": "c6bf5e26bab6858a900eec70379b686a0fbbcbed401f89aeb1d62afd48e10f63",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/S12.yaml": "86a1f9a04b9dabfd4dc9514811ca28b7b07c97b104dcd7d91deb0254557cbb12"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "S12",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_S12.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113553/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "S12_passive_r3",
+      "config_sha256": "52e93e8d328520d9897f3e5e9e760a0c8b1ac5a7af9f733eaa8aa1cffdae04d4",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 1151,
+      "sample_rate_hz": 50.0,
+      "pid": 123749,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113553/metrics.json": {
+      "samples": 1151,
+      "duration_sec": 22.999999999996934,
+      "position_rmse_m": {
+        "x": 0.02749453517460729,
+        "y": 0.03177099428575962,
+        "z": 0.014776848749127488
+      },
+      "orientation_rmse_rad": {
+        "x": 0.042091171131169294,
+        "y": 0.048120572475433894,
+        "z": 0.10344958938170615
+      },
+      "human_force_rms_n": {
+        "x": 2.895954755990055,
+        "y": 3.2591987034345045,
+        "z": 5.966928422050587
+      },
+      "human_force_peak_n": {
+        "x": 9.153630295111986,
+        "y": 10.419416012482452,
+        "z": 20.364057898403697
+      },
+      "human_task_torque_rms_nm": {
+        "x": 3.684783031272465,
+        "y": 4.3460964121506205,
+        "z": 10.53671352372952
+      },
+      "human_task_torque_peak_nm": {
+        "x": 6.138851904143631,
+        "y": 9.914236137032551,
+        "z": 22.661465071275877
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 21.875168835057906,
+      "human_absolute_work_j": 25.47932384214524,
+      "all_required_values_finite": true
+    }
+  },
+  "sinusoid_active_r1": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml",
+      "experiment_id:=sinusoid_active_r1",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/sinusoid_active_r1"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml": "06f7a83115bcbc566fbee360bf52a7dcf966c675a4e3d601b997970c62cc84de",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml": "1d949c7f5dec859ed1a0bdb9d710c24c26b0c2c4984a353fdafe9c297599725b"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "sinusoid",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            80.0
+          ],
+          "damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_112649/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "sinusoid_active_r1",
+      "config_sha256": "383cbf398028f08ebee3ee7252879effcd26c6aef1379027a9ba8ceb5b65e9ef",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 119254,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_112649/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001676,
+      "position_rmse_m": {
+        "x": 0.023101360483331734,
+        "y": 0.017872216493954193,
+        "z": 0.047648073182241076
+      },
+      "orientation_rmse_rad": {
+        "x": 0.026162301302083777,
+        "y": 0.0547054966725689,
+        "z": 0.040857620581558673
+      },
+      "human_force_rms_n": {
+        "x": 2.36845905292429,
+        "y": 1.8189551653224396,
+        "z": 19.062719083080783
+      },
+      "human_force_peak_n": {
+        "x": 8.356127084788817,
+        "y": 4.769756069859845,
+        "z": 25.476550371399533
+      },
+      "human_task_torque_rms_nm": {
+        "x": 0.8450062691716155,
+        "y": 21.960848160624234,
+        "z": 4.1493784328396215
+      },
+      "human_task_torque_peak_nm": {
+        "x": 1.7237674016115108,
+        "y": 33.340185454029694,
+        "z": 8.617766637375782
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 5.386121134789952,
+      "human_absolute_work_j": 6.308509639336032,
+      "all_required_values_finite": true
+    }
+  },
+  "sinusoid_active_r2": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml",
+      "experiment_id:=sinusoid_active_r2",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/sinusoid_active_r2"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml": "06f7a83115bcbc566fbee360bf52a7dcf966c675a4e3d601b997970c62cc84de",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml": "1d949c7f5dec859ed1a0bdb9d710c24c26b0c2c4984a353fdafe9c297599725b"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "sinusoid",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            80.0
+          ],
+          "damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113040/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "sinusoid_active_r2",
+      "config_sha256": "383cbf398028f08ebee3ee7252879effcd26c6aef1379027a9ba8ceb5b65e9ef",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 121294,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113040/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001676,
+      "position_rmse_m": {
+        "x": 0.0317245021639995,
+        "y": 0.01723960641956391,
+        "z": 0.04747785549845764
+      },
+      "orientation_rmse_rad": {
+        "x": 0.02593415773015923,
+        "y": 0.054645997151852206,
+        "z": 0.038927457372556054
+      },
+      "human_force_rms_n": {
+        "x": 3.2468552425955832,
+        "y": 1.771194436104511,
+        "z": 18.99393591086287
+      },
+      "human_force_peak_n": {
+        "x": 10.575458999233113,
+        "y": 4.823610892362205,
+        "z": 25.67145505352574
+      },
+      "human_task_torque_rms_nm": {
+        "x": 0.8615272946045903,
+        "y": 21.933980260411033,
+        "z": 3.966710873821533
+      },
+      "human_task_torque_peak_nm": {
+        "x": 1.6696216891536932,
+        "y": 33.42319118086733,
+        "z": 8.640477646293578
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 5.824309995597422,
+      "human_absolute_work_j": 6.969933898341172,
+      "all_required_values_finite": true
+    }
+  },
+  "sinusoid_active_r3": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml",
+      "experiment_id:=sinusoid_active_r3",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/sinusoid_active_r3"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml": "06f7a83115bcbc566fbee360bf52a7dcf966c675a4e3d601b997970c62cc84de",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml": "1d949c7f5dec859ed1a0bdb9d710c24c26b0c2c4984a353fdafe9c297599725b"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "active",
+      "task": "sinusoid",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "pr2_qp_whole_body_admittance_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "cmd_vel_lpf_alpha": 0.1,
+          "control_regime": "base_path_with_angular_admittance",
+          "damping_angular": [
+            80.0,
+            80.0,
+            80.0
+          ],
+          "damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "ee_pose_topic": "ee_pose",
+          "fixed_target_mode": false,
+          "force_deadzone": [
+            0.2,
+            0.2,
+            0.2
+          ],
+          "force_despring_thresh": [
+            1000000.0,
+            1000000.0,
+            1000000.0
+          ],
+          "freeze_orientation": false,
+          "hold_damping_linear": [
+            80.0,
+            80.0,
+            120.0
+          ],
+          "hold_stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "hold_until_wrench_active": false,
+          "input_wrench_topic": "mujoco/left_wrist_wrench",
+          "mass_angular": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "mass_linear": [
+            5.0,
+            5.0,
+            5.0
+          ],
+          "max_angular_velocity": [
+            0.1,
+            0.1,
+            0.1
+          ],
+          "max_linear_velocity": [
+            0.25,
+            0.25,
+            0.1
+          ],
+          "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+          "odom_topic": "odom",
+          "orientation_tracking_enable": false,
+          "output_cmd_vel_topic": "wbc/reference/cmd_vel",
+          "output_joint_command_topic": "wbc/reference/joint_command",
+          "pose_tracking_enable": false,
+          "posture_hold_enable": false,
+          "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+          "state_joint_topic": "state/joint_states",
+          "stiffness_angular": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "stiffness_linear": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "torque_deadzone": [
+            0.02,
+            0.02,
+            0.02
+          ],
+          "trajectory_assist_gain": 1.0,
+          "wrench_lpf_alpha": 0.06,
+          "wrench_update_rate_hz": 100.0
+        }
+      }
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113345/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "sinusoid_active_r3",
+      "config_sha256": "383cbf398028f08ebee3ee7252879effcd26c6aef1379027a9ba8ceb5b65e9ef",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 122826,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113345/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001674,
+      "position_rmse_m": {
+        "x": 0.018358092524855454,
+        "y": 0.018445628604052623,
+        "z": 0.04829733148538288
+      },
+      "orientation_rmse_rad": {
+        "x": 0.028714201283910962,
+        "y": 0.05565149337247961,
+        "z": 0.041394422300281994
+      },
+      "human_force_rms_n": {
+        "x": 1.898523993471614,
+        "y": 1.8899175497923906,
+        "z": 19.322810104849196
+      },
+      "human_force_peak_n": {
+        "x": 6.086514017418242,
+        "y": 5.104829660364781,
+        "z": 25.7000817893682
+      },
+      "human_task_torque_rms_nm": {
+        "x": 0.887575444142658,
+        "y": 22.288453106449445,
+        "z": 4.169776512208783
+      },
+      "human_task_torque_peak_nm": {
+        "x": 1.6810249238335344,
+        "y": 34.82255058766329,
+        "z": 9.458207129304682
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 5.19092625298777,
+      "human_absolute_work_j": 5.925568637026814,
+      "all_required_values_finite": true
+    }
+  },
+  "sinusoid_passive_r1": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml",
+      "experiment_id:=sinusoid_passive_r1",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/sinusoid_passive_r1"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml": "06f7a83115bcbc566fbee360bf52a7dcf966c675a4e3d601b997970c62cc84de",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml": "1d949c7f5dec859ed1a0bdb9d710c24c26b0c2c4984a353fdafe9c297599725b"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "sinusoid",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_112715/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "sinusoid_passive_r1",
+      "config_sha256": "383cbf398028f08ebee3ee7252879effcd26c6aef1379027a9ba8ceb5b65e9ef",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 119539,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_112715/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001674,
+      "position_rmse_m": {
+        "x": 0.06929012493292112,
+        "y": 0.0221495965688202,
+        "z": 0.0483630335515878
+      },
+      "orientation_rmse_rad": {
+        "x": 0.02939910975072154,
+        "y": 0.05527411830826109,
+        "z": 0.04845943092992141
+      },
+      "human_force_rms_n": {
+        "x": 7.000032012992995,
+        "y": 2.261255840827125,
+        "z": 19.347492877329984
+      },
+      "human_force_peak_n": {
+        "x": 16.394215763276634,
+        "y": 5.615973455316681,
+        "z": 26.202720327570795
+      },
+      "human_task_torque_rms_nm": {
+        "x": 1.0507167376804867,
+        "y": 22.117344953277872,
+        "z": 4.864535091656236
+      },
+      "human_task_torque_peak_nm": {
+        "x": 2.9639877099695524,
+        "y": 35.742183880395785,
+        "z": 12.473562550492062
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 9.83224776598733,
+      "human_absolute_work_j": 10.49165234671316,
+      "all_required_values_finite": true
+    }
+  },
+  "sinusoid_passive_r2": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml",
+      "experiment_id:=sinusoid_passive_r2",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/sinusoid_passive_r2"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml": "06f7a83115bcbc566fbee360bf52a7dcf966c675a4e3d601b997970c62cc84de",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml": "1d949c7f5dec859ed1a0bdb9d710c24c26b0c2c4984a353fdafe9c297599725b"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "sinusoid",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113010/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "sinusoid_passive_r2",
+      "config_sha256": "383cbf398028f08ebee3ee7252879effcd26c6aef1379027a9ba8ceb5b65e9ef",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 121003,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113010/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001674,
+      "position_rmse_m": {
+        "x": 0.06822368828351226,
+        "y": 0.021588122689586153,
+        "z": 0.04813115843399493
+      },
+      "orientation_rmse_rad": {
+        "x": 0.02900364908008998,
+        "y": 0.054789090737874774,
+        "z": 0.04737803085817493
+      },
+      "human_force_rms_n": {
+        "x": 6.896235132167271,
+        "y": 2.199410381346759,
+        "z": 19.25577693881317
+      },
+      "human_force_peak_n": {
+        "x": 15.917287498731195,
+        "y": 5.341086664415537,
+        "z": 25.844633676164374
+      },
+      "human_task_torque_rms_nm": {
+        "x": 1.0101142653518609,
+        "y": 21.910867346383927,
+        "z": 4.76601919114445
+      },
+      "human_task_torque_peak_nm": {
+        "x": 2.7184626146040904,
+        "y": 35.174958829582664,
+        "z": 11.834477089846272
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 9.420217774632036,
+      "human_absolute_work_j": 10.13127994912123,
+      "all_required_values_finite": true
+    }
+  },
+  "sinusoid_passive_r3": {
+    "launch_command.json": [
+      "ros2",
+      "launch",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py",
+      "condition:=human_robot",
+      "robot_mode:=admittance",
+      "use_viewer:=false",
+      "config_file:=/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml",
+      "experiment_id:=sinusoid_passive_r3",
+      "output_root:=/workspace/results/base_feedforward_paths_20261027/sinusoid_passive_r3"
+    ],
+    "source_hashes.json": {
+      "/workspace/results/base_feedforward_paths_20261027/angular_priority.py": "6cc72dd10f2d237eca54154a0d84bde0835d29e5ad346cef702df380e7c197a2",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_qp.py": "9eac5648103aad56254727115b3e56e5b9465d027e357f9d106c10969d8185d6",
+      "/workspace/results/base_feedforward_paths_20261027/experimental_guard.py": "67a0ac88a5f2ef36f609ad238071c8a4a689e9fc0aafa5f27d4411d095164593",
+      "/workspace/results/base_feedforward_paths_20261027/known_path.launch.py": "4a26ae7d93db8dfe237f9fa02d6ac2497593f4fb144adc91a048162453a9fd3b",
+      "/workspace/results/base_feedforward_paths_20261027/planned_base_path.py": "dc5bcbbd1825a8a6b28c43608b0d4600b108bf3d019cbb3299f3edb0ea9994b4",
+      "/workspace/results/base_feedforward_paths_20261027/run_case.py": "7c0b1dd6032308a7e52d6a40067c4da495ba9f7a09b4d4a696594d99825705ef",
+      "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml": "06f7a83115bcbc566fbee360bf52a7dcf966c675a4e3d601b997970c62cc84de",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_qp_whole_body_admittance.py": "8892c287260a2d793c547fa33e801ac16393c982b43c9aa9e9ece7e54727973d",
+      "/workspace/pr2_ws/src/pr2_wbc_admittance_control/pr2_wbc_admittance_control/pr2_wbc_coordinator.py": "8a57cb13399672a2a89258043fe3e25625421087448051233bbc48b577f41e08",
+      "/workspace/pr2_ws/src/pr2_virtual_human/launch/transport_comparison.launch.py": "11beb60165776d8a0d3ee9787b84aed08a438311d6fa13a7cb61e79590dd14af",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/human_robot_controller.py": "7ffb62ad3b7aa1ec54ed9ec07c2b25013edaf7ddf5674e220ae133b0c58fe48e",
+      "/workspace/pr2_ws/src/pr2_virtual_human/pr2_virtual_human/contract_guard.py": "179b21d1eb2d5040d5100a696b6919947e70619825503d5f2c1ec0ad7be99d35",
+      "/workspace/pr2_ws/src/pr2_virtual_human/config/transport_comparison.yaml": "4ffce0483acda0df23f620d03ff2a71a8bc319865f339a95de8c4b08c728f202",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml": "bd70f78a5d0bbc0d1ff05e156c8b37b0ed8415f370ea3b0d42ff5a193dd77b62",
+      "/workspace/unitree_mujoco/unitree_robots/pr2/robot_pr2_board_grasp.xml": "da028165cd4ea17bfcd59facc5c92881eb85b0c8819af9471dcbb0e722e99b17",
+      "/workspace/results/base_feedforward_paths_20261027/sinusoid.yaml": "1d949c7f5dec859ed1a0bdb9d710c24c26b0c2c4984a353fdafe9c297599725b"
+    },
+    "exit.json": {
+      "launch_exit": 0,
+      "logger_exit": 0,
+      "timed_out": false
+    },
+    "control_condition.json": {
+      "mode": "passive",
+      "task": "sinusoid",
+      "robot_path_file": "/workspace/results/base_feedforward_paths_20261027/robot_path_sinusoid.yaml",
+      "note": "Independent configured base path. Original human and friction scene. Active: nominal planar transport + linear admittance correction, angular admittance priority. Passive: original QP. Zero-feedforward: new allocation with zero path velocity. Base filtering and 10Hz coordinator unchanged."
+    },
+    "comparison_contract_guard_params.yaml": {
+      "/**": {
+        "ros__parameters": {
+          "expected_tare_duration_sec": 2.0
+        }
+      }
+    },
+    "run_20261027_113420/run_manifest.json": {
+      "schema_version": 1,
+      "condition": "human_robot",
+      "experiment_id": "sinusoid_passive_r3",
+      "config_sha256": "383cbf398028f08ebee3ee7252879effcd26c6aef1379027a9ba8ceb5b65e9ef",
+      "git_commit": "9a23694ed53a749ef0ac9e74327d084cb888e258",
+      "model_path": "/workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml",
+      "sample_count": 650,
+      "sample_rate_hz": 50.0,
+      "pid": 123119,
+      "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
+      "simulation_timestep_sec": 0.002,
+      "python_version": "3.12.3",
+      "ros_distro": "jazzy",
+      "robot_wrist_wrench_semantics": "tare-referenced measured diagnostic; never used by the human controller",
+      "wrist_tare_duration_sec": 2.0
+    },
+    "run_20261027_113420/metrics.json": {
+      "samples": 650,
+      "duration_sec": 12.980000000001695,
+      "position_rmse_m": {
+        "x": 0.06580493202980782,
+        "y": 0.02209172251893167,
+        "z": 0.046474916933523874
+      },
+      "orientation_rmse_rad": {
+        "x": 0.029267099513127073,
+        "y": 0.0520403958613099,
+        "z": 0.04846717133452924
+      },
+      "human_force_rms_n": {
+        "x": 6.629246269429467,
+        "y": 2.265948081893897,
+        "z": 18.594729925027803
+      },
+      "human_force_peak_n": {
+        "x": 14.898470670643343,
+        "y": 5.644342102571942,
+        "z": 25.85713498754371
+      },
+      "human_task_torque_rms_nm": {
+        "x": 1.055885581566546,
+        "y": 20.83344145964517,
+        "z": 4.8665170163759
+      },
+      "human_task_torque_peak_nm": {
+        "x": 2.9783036896845623,
+        "y": 34.36531383624644,
+        "z": 12.352112747199024
+      },
+      "human_wrench_saturation_fraction": 0.0,
+      "human_signed_work_j": 9.367336686539819,
+      "human_absolute_work_j": 10.005700466648054,
+      "all_required_values_finite": true
+    }
+  }
+}

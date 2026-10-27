@@ -1,0 +1,7 @@
+{
+  "allocator_identical": true,
+  "admittance_source_still_production": true,
+  "solver_adapter_setup_identical": true,
+  "solver_adapter_update_identical": true,
+  "solver_adapter_solve_identical_except_read_only_clipping_diagnostics": true
+}

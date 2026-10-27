@@ -1,0 +1,42 @@
+{
+  "S11": {
+    "runs": 6,
+    "same_human_task_input": true,
+    "completed": 6,
+    "all_ended_grasping": true,
+    "all_contact_fraction_one": true,
+    "no_saturation": true
+  },
+  "sinusoid": {
+    "runs": 6,
+    "same_human_task_input": true,
+    "completed": 6,
+    "all_ended_grasping": true,
+    "all_contact_fraction_one": true,
+    "no_saturation": true
+  },
+  "S12": {
+    "runs": 6,
+    "same_human_task_input": true,
+    "completed": 6,
+    "all_ended_grasping": true,
+    "all_contact_fraction_one": true,
+    "no_saturation": true
+  },
+  "angular_priority.py": {
+    "unchanged_during_all_runs": true,
+    "current_matches_tested": true
+  },
+  "experimental_qp.py": {
+    "unchanged_during_all_runs": true,
+    "current_matches_tested": true
+  },
+  "planned_base_path.py": {
+    "unchanged_during_all_runs": true,
+    "current_matches_tested": true
+  },
+  "known_path.launch.py": {
+    "unchanged_during_all_runs": true,
+    "current_matches_tested": true
+  }
+}
