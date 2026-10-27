@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 import numpy as np
+import mujoco
 import rclpy
 from geometry_msgs.msg import PoseStamped, Vector3Stamped, WrenchStamped
 from rclpy.node import Node
@@ -37,6 +38,7 @@ class ComparisonRecorder(Node):
         self.declare_parameter("condition", "human_only")
         self.declare_parameter("experiment_id", "default")
         self.declare_parameter("output_root", "")
+        self.declare_parameter("model_path", "")
         self.declare_parameter("robot_wrist_source_topic", "mujoco/left_wrist_wrench")
         self.declare_parameter("robot_ee_source_topic", "ee_pose")
         config_path = str(self.get_parameter("config_file").value)
@@ -46,6 +48,12 @@ class ComparisonRecorder(Node):
         self.condition = str(self.get_parameter("condition").value)
         if self.condition not in ("human_only", "human_robot"):
             raise RuntimeError("condition must be human_only or human_robot")
+        self.model_path = str(self.get_parameter("model_path").value) or (
+            self.config.human_only_model if self.condition == "human_only"
+            else self.config.human_robot_model
+        )
+        model = mujoco.MjModel.from_xml_path(self.model_path)
+        self.simulation_timestep = float(model.opt.timestep)
         self.experiment_id = str(self.get_parameter("experiment_id").value)
         self.output_root = str(self.get_parameter("output_root").value) or self.config.output_root
         self.latest: dict[str, object] = {}
@@ -179,12 +187,12 @@ class ComparisonRecorder(Node):
             "experiment_id": self.experiment_id,
             "config_sha256": self.config.config_hash,
             "git_commit": self._git_commit(),
-            "model_path": self.config.human_only_model if self.condition == "human_only" else self.config.human_robot_model,
+            "model_path": self.model_path,
             "sample_count": len(self.rows),
             "sample_rate_hz": self.config.publish_rate_hz,
             "pid": os.getpid(),
             "launch_entry": "pr2_virtual_human transport_comparison.launch.py",
-            "simulation_timestep_sec": 0.002,
+            "simulation_timestep_sec": self.simulation_timestep,
             "python_version": sys.version.split()[0],
             "ros_distro": os.environ.get("ROS_DISTRO", "unknown"),
             "robot_wrist_wrench_semantics": (

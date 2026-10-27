@@ -50,6 +50,9 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool, Float64, Float64MultiArray
 from tf2_ros import TransformBroadcaster
 
+from .weld_sensor import weld_sensor_torque_correction
+from .friction_grasp import validate_friction_grasp
+
 
 def _classify_actuator(name: str) -> str:
     if name.endswith("_pos"):
@@ -194,6 +197,7 @@ class Pr2MujocoSim(Node):
         # Optional persistent left-gripper position command.  A negative value
         # preserves the legacy default; collaborative grasp scenes set it.
         self.declare_parameter("left_gripper_hold_position", -1.0)
+        self.declare_parameter("require_friction_grasp", False)
         # When cmd_vel magnitude is small, atan2(vy,vx) becomes very sensitive to noise.
         # Hold the steering direction under small planar speed to avoid caster hunting.
         self.declare_parameter("cmd_vel_dir_hold_vplanar_min", 0.05)
@@ -642,6 +646,19 @@ class Pr2MujocoSim(Node):
             and self._board_left_finger_geom_ids
             and self._board_right_finger_geom_ids
         )
+        self._require_friction_grasp = bool(
+            self.get_parameter("require_friction_grasp").value
+        )
+        if self._require_friction_grasp:
+            validate_friction_grasp(
+                self._model, self._data, self._board_body_id,
+                self._board_geom_ids,
+                self._board_left_finger_geom_ids,
+                self._board_right_finger_geom_ids,
+            )
+            self.get_logger().info(
+                "board grasp: contact friction; no active board weld/connect"
+            )
         if self._board_grasp_ready:
             self.get_logger().info(
                 "board grasp contact 检测已启用: 发布 mujoco/board_grasped"
@@ -840,25 +857,48 @@ class Pr2MujocoSim(Node):
         right = set(self._board_right_finger_geom_ids)
         left_touch = False
         right_touch = False
+        contacts = []
         for i in range(int(self._data.ncon)):
             c = self._data.contact[i]
             g1 = int(c.geom1)
             g2 = int(c.geom2)
-            if (g1 in board and g2 in left) or (g2 in board and g1 in left):
-                left_touch = True
-            if (g1 in board and g2 in right) or (g2 in board and g1 in right):
-                right_touch = True
-            if left_touch and right_touch:
-                break
+            is_left = (g1 in board and g2 in left) or (g2 in board and g1 in left)
+            is_right = (g1 in board and g2 in right) or (g2 in board and g1 in right)
+            if not (is_left or is_right):
+                continue
+            force = np.zeros(6)
+            mujoco.mj_contactForce(self._model, self._data, i, force)
+            left_touch |= bool(is_left and force[0] > 1.0e-3)
+            right_touch |= bool(is_right and force[0] > 1.0e-3)
+            contacts.append({"side": "left" if is_left else "right",
+                             "force_local": force.tolist(), "distance": float(c.dist),
+                             "point_board": (
+                                 self._data.xmat[self._board_body_id].reshape(3, 3).T
+                                 @ (c.pos - self._data.xpos[self._board_body_id])
+                             ).tolist(),
+                             "normal_board": (
+                                 self._data.xmat[self._board_body_id].reshape(3, 3).T
+                                 @ c.frame[:3]
+                             ).tolist()})
         msg = Bool()
         # Point-contact scenes have no pad collision pair: the MuJoCo connect
         # equality itself is the active robot grasp reaction.
         point_contact = (
-            self._board_connect_eq_id >= 0
+            not self._require_friction_grasp
+            and self._board_connect_eq_id >= 0
             and bool(self._data.eq_active[self._board_connect_eq_id])
         )
         msg.data = bool(point_contact or (left_touch and right_touch))
         self._pub_board_grasped.publish(msg)
+        if self._require_friction_grasp:
+            tool_rotation = self._data.xmat[self._ee_body_id].reshape(3, 3)
+            relative_position = tool_rotation.T @ (
+                self._data.xpos[self._board_body_id] - self._data.xpos[self._ee_body_id]
+            )
+            self._dbg_write("H_BoardFriction", "measured fingertip contact forces", {
+                "sim_time": float(self._data.time), "grasped": bool(msg.data),
+                "contacts": contacts, "board_in_tool": relative_position.tolist(),
+            })
 
     def _publish_board_and_wrist_state(self, stamp) -> None:
         """Publish measured board/hand poses and the physical wrist wrench."""
@@ -912,6 +952,10 @@ class Pr2MujocoSim(Node):
         )
         torque_world = (
             self._left_wrist_wrench_sign * site_rotation @ torque_local
+        )
+        torque_world += weld_sensor_torque_correction(
+            self._model, self._data, self._board_connect_eq_id,
+            self._left_wrist_site_id, self._left_wrist_wrench_sign,
         )
         raw_wrench = np.concatenate([force_world, torque_world])
         if (
@@ -1360,7 +1404,132 @@ class Pr2MujocoSim(Node):
         # Write xfrc_applied (6D: force + torque at COM)
         self._data.xfrc_applied[bid, :] = np.concatenate([F, tau])
 
+    # Caster pivot positions in base frame (m), order matches _demo_steer_ids.
+    _CASTER_XY = np.array(
+        [[0.2246, 0.2246], [0.2246, -0.2246], [-0.2246, 0.2246], [-0.2246, -0.2246]],
+        dtype=np.float64,
+    )
+
     def _apply_cmd_vel_to_ctrl(self, target: np.ndarray) -> None:
+        if not self._use_cmd_vel:
+            return
+
+        def _wrap_to_pi(a):
+            # Map angle(s) to (-pi, pi]; works on scalars and arrays.
+            return (a + math.pi) % (2.0 * math.pi) - math.pi
+
+        vx = float(self._twist.linear.x)
+        vy = float(self._twist.linear.y)
+        wz = float(self._twist.angular.z)
+        steer_ids = self._demo_steer_ids
+        wheel_ids = self._demo_wheel_ids
+        if len(steer_ids) < 4 or len(wheel_ids) < 8 or len(self._dbg_base_steer_qadr) < 4:
+            return
+        # If cmd_vel is (near) zero, actively stop wheels.
+        if abs(vx) < 1e-6 and abs(vy) < 1e-6 and abs(wz) < 1e-6:
+            for aid in wheel_ids[:8]:
+                if aid >= 0:
+                    target[aid] = 0.0
+            return
+
+        # Low-pass cmd_vel planar components to reduce direction jitter.
+        a = float(self._cmd_vel_dir_lpf_alpha)
+        self._cmd_vel_vx_f = (1.0 - a) * float(self._cmd_vel_vx_f) + a * vx
+        self._cmd_vel_vy_f = (1.0 - a) * float(self._cmd_vel_vy_f) + a * vy
+        vx_f = float(self._cmd_vel_vx_f)
+        vy_f = float(self._cmd_vel_vy_f)
+
+        # Holonomic caster kinematics: each pivot sees v_i = v + wz x r_i, so
+        # translation and rotation execute simultaneously.  The previous
+        # "translate elif rotate" branch dropped wz whenever |v| > 0.
+        r = self._CASTER_XY
+        v_i = np.column_stack([vx_f - wz * r[:, 1], vy_f + wz * r[:, 0]])
+        speed_i = np.hypot(v_i[:, 0], v_i[:, 1])
+        vplanar = float(speed_i.max())
+        if vplanar <= 1e-6:
+            for aid in wheel_ids[:8]:
+                target[aid] = 0.0
+            return
+
+        cur = np.array([float(self._data.qpos[q]) for q in self._dbg_base_steer_qadr[:4]])
+        steer_target_raw = _wrap_to_pi(np.arctan2(v_i[:, 1], v_i[:, 0]))
+        # Fold direction into wheel sign so a caster never has to swing by pi.
+        flip = np.abs(_wrap_to_pi(steer_target_raw - cur)) > (math.pi / 2.0)
+        steer_target_raw = np.where(flip, _wrap_to_pi(steer_target_raw + math.pi), steer_target_raw)
+        wheel_sign = np.where(flip, -1.0, 1.0)
+
+        # Angle-domain low-pass on steer targets (shortest-angle interpolation).
+        steer_target = steer_target_raw.copy()
+        if self._last_steer_target is not None:
+            a_ang = float(self._cmd_vel_steer_target_lpf_alpha)
+            d = _wrap_to_pi(steer_target_raw - self._last_steer_target)
+            steer_target = _wrap_to_pi(self._last_steer_target + a_ang * d)
+            # Under very small speed, hold last direction to avoid caster hunting.
+            if vplanar < float(self._cmd_vel_dir_hold_vmin):
+                steer_target = self._last_steer_target.copy()
+        self._last_steer_target = steer_target.copy()
+
+        steer_err_max = float(np.abs(_wrap_to_pi(cur - steer_target)).max())
+        start = float(max(1e-6, self._steer_gate_err_start))
+        full = float(max(start + 1e-6, self._steer_gate_err_full))
+
+        # Rate-limit steer command (boosted when the target jumps far).
+        now_m = time.monotonic()
+        steer = steer_target.copy()
+        bypass = (bool(self._steer_gate_hard_stop) and steer_err_max >= full) or steer_err_max <= start
+        if self._last_steer_cmd is not None and self._last_steer_cmd_mono is not None and not bypass:
+            dt = float(max(1e-6, now_m - self._last_steer_cmd_mono))
+            diff = _wrap_to_pi(steer_target - self._last_steer_cmd)
+            rate = np.where(
+                np.abs(diff) > self._steer_rate_boost_err,
+                max(self._steer_rate_limit, self._steer_rate_boost),
+                self._steer_rate_limit,
+            )
+            steer = _wrap_to_pi(self._last_steer_cmd + np.clip(diff, -rate * dt, rate * dt))
+        self._last_steer_cmd = steer.copy()
+        self._last_steer_cmd_mono = float(now_m)
+
+        # Gate wheel drive on actual caster alignment.
+        if steer_err_max >= full:
+            k = 0.0
+        elif steer_err_max <= start:
+            k = 1.0
+        else:
+            k = 1.0 - (steer_err_max - start) / (full - start)
+        if (not bool(self._steer_gate_hard_stop)) or (steer_err_max < full):
+            k = max(k, float(min(1.0, max(0.0, self._steer_gate_k_min))))
+
+        v_wheel = speed_i * wheel_sign * float(self._lin_gain) * k
+        for i, sid in enumerate(steer_ids[:4]):
+            target[sid] = float(steer[i])
+        for i, wid in enumerate(wheel_ids[:8]):
+            target[wid] = float(v_wheel[i // 2])
+
+        # #region agent log
+        try:
+            period = 0.1 if vplanar > 0.05 else 0.5
+            if now_m - self._dbg_last_cmdvel_mono > period:
+                self._dbg_last_cmdvel_mono = now_m
+                self._dbg_write(
+                    "H_SimCmdVelFrame",
+                    "apply_cmd_vel_to_ctrl holonomic",
+                    {
+                        "cmd_vel_base": [vx, vy, wz],
+                        "cmd_vel_filt_xy": [vx_f, vy_f],
+                        "steer_target": [float(x) for x in steer_target],
+                        "steer_cmd": [float(x) for x in steer],
+                        "steer_act_qpos": [float(x) for x in cur],
+                        "steer_err_max_abs": steer_err_max,
+                        "steer_gate_k": float(k),
+                        "v_wheel_cmd": [float(x) for x in v_wheel],
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion agent log
+        return
+
+    def _apply_cmd_vel_to_ctrl_legacy(self, target: np.ndarray) -> None:
         if not self._use_cmd_vel:
             return
 

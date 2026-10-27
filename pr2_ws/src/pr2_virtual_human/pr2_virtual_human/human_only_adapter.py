@@ -101,6 +101,9 @@ class HumanOnlyAdapter(Node):
 
     def step(self) -> None:
         rclpy.spin_once(self, timeout_sec=0.0)
+        # Refresh pose and velocity at the current qpos/qvel before feedback.
+        # mj_step leaves these derived fields at the previous step's state.
+        mujoco.mj_step1(self.model, self.data)
         hand_position, quaternion = self._measure()
         self._update_velocity(quaternion)
         previous_state = self.machine.state
@@ -126,7 +129,7 @@ class HumanOnlyAdapter(Node):
         applied_force, applied_torque, natural_moment = wrench_at_body_com(force, task_torque, offset_world)
         self.data.xfrc_applied[self.board_id, :3] = applied_force
         self.data.xfrc_applied[self.board_id, 3:] = applied_torque
-        mujoco.mj_step(self.model, self.data)
+        mujoco.mj_step2(self.model, self.data)
         self._publish(hand_position, quaternion, target, force, task_torque, natural_moment)
 
     def run(self) -> None:

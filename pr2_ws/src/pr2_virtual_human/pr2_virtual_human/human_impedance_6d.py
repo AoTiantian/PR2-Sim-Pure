@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .spatial import orientation_error_world
+from .spatial import orientation_error_world, quaternion_to_matrix
 from .trajectory_6d import TrajectorySample
 
 
@@ -25,10 +25,15 @@ class HumanImpedanceConfig:
     angular_damping: np.ndarray
     force_limit: np.ndarray
     task_torque_limit: np.ndarray
+    angular_frame: str = "world"
 
     def __post_init__(self) -> None:
         for name in self.__dataclass_fields__:
+            if name == "angular_frame":
+                continue
             object.__setattr__(self, name, _vec3(name, getattr(self, name)))
+        if self.angular_frame not in ("world", "body"):
+            raise ValueError("angular_frame must be world or body")
         if np.any(self.linear_stiffness < 0.0) or np.any(self.linear_damping < 0.0):
             raise ValueError("linear impedance gains must be non-negative")
         if np.any(self.angular_stiffness < 0.0) or np.any(self.angular_damping < 0.0):
@@ -75,8 +80,21 @@ class HumanImpedance6D:
             -self.config.force_limit,
             self.config.force_limit,
         )
+        if self.config.angular_frame == "body":
+            # Keep the gains on the board's physical axes as it turns.
+            # Inputs, returned errors and applied torques remain world-frame.
+            rotation = quaternion_to_matrix(actual_quaternion)
+            angular_command = rotation @ (
+                self.config.angular_stiffness * (rotation.T @ orientation_error)
+                + self.config.angular_damping * (rotation.T @ angular_velocity_error)
+            )
+        else:
+            angular_command = (
+                self.config.angular_stiffness * orientation_error
+                + self.config.angular_damping * angular_velocity_error
+            )
         task_torque = np.clip(
-            self.config.angular_stiffness * orientation_error + self.config.angular_damping * angular_velocity_error,
+            angular_command,
             -self.config.task_torque_limit,
             self.config.task_torque_limit,
         )

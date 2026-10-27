@@ -1,4 +1,6 @@
 import numpy as np
+import pytest
+from dataclasses import replace
 
 from pr2_virtual_human.human_impedance_6d import (
     HumanImpedance6D,
@@ -6,6 +8,7 @@ from pr2_virtual_human.human_impedance_6d import (
     wrench_at_body_com,
 )
 from pr2_virtual_human.trajectory_6d import TrajectorySample
+from pr2_virtual_human.spatial import matrix_to_quaternion, rotvec_to_matrix
 
 
 def config() -> HumanImpedanceConfig:
@@ -65,4 +68,43 @@ def test_task_torque_does_not_depend_on_endpoint_force() -> None:
     first = impedance.evaluate(target(), target().position, np.zeros(3), actual_q, np.zeros(3))
     second = impedance.evaluate(target(), target().position, np.zeros(3), actual_q, np.zeros(3))
     np.testing.assert_allclose(first.task_torque, second.task_torque)
+
+
+@pytest.mark.parametrize("yaw", [0.0, np.pi / 2, np.pi])
+def test_body_angular_gains_follow_the_long_axis_through_a_turn(yaw: float) -> None:
+    heading = rotvec_to_matrix(np.array([0.0, 0.0, yaw]))
+    actual_rotation = heading @ rotvec_to_matrix(np.array([0.1, 0.0, 0.0]))
+    sample = replace(target(), quaternion=matrix_to_quaternion(heading))
+    result = HumanImpedance6D(replace(config(), angular_frame="body")).evaluate(
+        sample, sample.position, np.zeros(3), matrix_to_quaternion(actual_rotation),
+        actual_rotation @ np.array([0.2, 0.0, 0.0]),
+    )
+    # The same physical roll error/speed must use Kx=.5 and Dx=.1 at
+    # every heading. Torque is returned in world coordinates.
+    np.testing.assert_allclose(result.task_torque, heading @ np.array([-0.07, 0.0, 0.0]), atol=1e-12)
+
+
+def test_legacy_world_frame_keeps_its_original_heading_dependent_response() -> None:
+    heading = rotvec_to_matrix(np.array([0.0, 0.0, np.pi / 2]))
+    actual_rotation = heading @ rotvec_to_matrix(np.array([0.1, 0.0, 0.0]))
+    sample = replace(target(), quaternion=matrix_to_quaternion(heading))
+    result = HumanImpedance6D(config()).evaluate(
+        sample, sample.position, np.zeros(3), matrix_to_quaternion(actual_rotation),
+        actual_rotation @ np.array([0.2, 0.0, 0.0]),
+    )
+    np.testing.assert_allclose(result.task_torque, [0.0, -0.54, 0.0], atol=1e-12)
+
+
+def test_body_frame_preserves_world_component_torque_limits() -> None:
+    result = HumanImpedance6D(replace(config(), angular_frame="body")).evaluate(
+        target(), target().position, np.zeros(3),
+        matrix_to_quaternion(rotvec_to_matrix(np.array([0.0, 0.0, 1.0]))),
+        np.array([100.0, -100.0, 100.0]),
+    )
+    assert np.all(np.abs(result.task_torque) <= config().task_torque_limit)
+
+
+def test_invalid_angular_frame_is_rejected() -> None:
+    with pytest.raises(ValueError, match="angular_frame"):
+        replace(config(), angular_frame="invalid")
 

@@ -42,6 +42,11 @@ def _build(context):
         trajectory_cfg.get("presets", {}).get(active_scenario, {}).get("robot_overrides", {})
     )
     admittance = {**robot["admittance"], **scenario_overrides}
+    model_path = (
+        human_only_model_override or str(config["models"]["human_only"])
+        if condition == "human_only"
+        else human_robot_model_override or str(config["models"]["human_robot"])
+    )
 
     recorder = Node(
         package="pr2_virtual_human",
@@ -53,6 +58,7 @@ def _build(context):
             "condition": condition,
             "experiment_id": experiment_id,
             "output_root": output_root,
+            "model_path": model_path,
         }],
     )
     shutdown = RegisterEventHandler(
@@ -66,13 +72,12 @@ def _build(context):
             output="both",
             parameters=[
                 {"config_file": config_file},
-                {"model_path": human_only_model_override or str(config["models"]["human_only"])},
+                {"model_path": model_path},
                 {"use_viewer": ParameterValue(use_viewer, value_type=bool)},
             ],
         )
         return [adapter, recorder, shutdown]
 
-    model_path = human_robot_model_override or str(config["models"]["human_robot"])
     sim = Node(
         package="pr2_mujoco_bridge",
         executable="pr2_mujoco_sim",
@@ -81,6 +86,9 @@ def _build(context):
         parameters=[
             {"model_path": model_path},
             {"use_viewer": ParameterValue(use_viewer, value_type=bool)},
+            # Default (2.0) undercommands wheel speed ~8.5x relative to the actual
+            # wheel radius; other launch files in this repo already use 17.0.
+            {"cmd_vel_linear_gain": 17.0},
             {"demo_motion": False},
             {"use_cmd_vel": True},
             {"lock_base_motion": False},
@@ -102,7 +110,8 @@ def _build(context):
             # reference, never the MuJoCo force, r x F, or weld reaction.
             {"left_wrist_tare_duration_sec": float(experiment["settle_sec"])},
             {"gripper_open_time_sec": 0.0},
-            {"left_gripper_hold_position": 0.52},
+            {"left_gripper_hold_position": float(robot["left_gripper_hold_position"])},
+            {"require_friction_grasp": True},
         ],
     )
     state_estimator = Node(

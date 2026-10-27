@@ -113,6 +113,7 @@ def load_comparison_config(path: str | Path) -> ComparisonConfig:
             angular_damping=_vec3(impedance, "angular_damping"),
             force_limit=_vec3(impedance, "force_limit"),
             task_torque_limit=_vec3(impedance, "task_torque_limit"),
+            angular_frame=str(impedance.get("angular_frame", "world")),
         ),
         hand_offset=_vec3(experiment, "human_hand_offset"),
         publish_rate_hz=max(float(experiment["publish_rate_hz"]), 1.0),

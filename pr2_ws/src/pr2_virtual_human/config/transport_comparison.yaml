@@ -34,21 +34,21 @@ trajectory:
       waypoints: [[0, 0, 0], [-0.293, 0.707, 45], [-1.0, 1.0, 90], [-1.707, 0.707, 135], [-2.0, 0.0, 180]]
       segment_durations_sec: [5.0, 6.0, 6.0, 5.0]
       robot_overrides:
+        # Verified with the wrist-only controller on the 22 s S12 turn.
+        # Lower planar/yaw resistance; vertical and roll/pitch gains unchanged.
+        damping_linear: [20.0, 20.0, 120.0]
+        damping_angular: [80.0, 80.0, 20.0]
         max_angular_velocity: [0.3, 0.3, 0.4]
 
 human_impedance:
   linear_stiffness: [100.0, 100.0, 400.0]
   linear_damping: [15.0, 15.0, 10.0]
-  # X stiffness 100->30: the roll-about-long-axis mode is discretely
-  # marginal at the 500 Hz rate (damping cap ~2*I/T with tiny I), so more
-  # damping self-excites it.  Lowering K raises zeta (~0.19 -> ~0.35),
-  # moves the mode away from the delay boundary, and cuts error-to-torque
-  # excitation 3x; the axis carries ~zero steady torque so tracking cost
-  # is negligible at trajectory bandwidths.
-  # X stiffness temporarily back to 100 to replicate the cmd10hz-era
-  # configuration (see angular_stiffness note below for why it was lowered
-  # to 30 and when to prefer which value).
-  angular_stiffness: [100.0, 400.0, 100.0]
+  # Angular gains follow the board axes: X is its low-inertia long axis.
+  # World-fixed gains exchange roll/pitch behavior during a yaw turn.
+  # The existing numerical gains are retained; forces, returned torques,
+  # and component-wise wrench limits remain in the world frame.
+  angular_frame: body
+  angular_stiffness: [30.0, 400.0, 100.0]
   angular_damping: [0.5, 10.0, 5.0]
   force_limit: [60.0, 60.0, 60.0]
   task_torque_limit: [60.0, 60.0, 60.0]
@@ -58,18 +58,21 @@ models:
   human_robot: /workspace/unitree_mujoco/unitree_robots/pr2/scene_grasp_board_long.xml
 
 robot:
+  # Pre-grasp pose: fingertips parallel to the board, with finite closing force.
+  # Joint coordinates initialize the scene; no board pose is enforced at runtime.
   initial_qpos_json: >-
-    {"l_shoulder_pan_joint": 0.11735056,
-     "l_shoulder_lift_joint": 0.69968519,
-     "l_upper_arm_roll_joint": 0.00321579,
-     "l_elbow_flex_joint": -1.38673805,
-     "l_forearm_roll_joint": -1.78800816,
-     "l_wrist_flex_joint": -1.31706743,
-     "l_wrist_roll_joint": 2.28528285,
-     "l_gripper_l_finger_joint": 0.52,
-     "l_gripper_r_finger_joint": 0.52,
-     "l_gripper_l_finger_tip_joint": 0.52,
-     "l_gripper_r_finger_tip_joint": 0.52}
+    {"l_shoulder_pan_joint": 0.1252159657,
+     "l_shoulder_lift_joint": 0.5903452696,
+     "l_upper_arm_roll_joint": 0.0037767314,
+     "l_elbow_flex_joint": -1.1437555675,
+     "l_forearm_roll_joint": -1.6383987506,
+     "l_wrist_flex_joint": -1.467777587,
+     "l_wrist_roll_joint": 2.1274965125,
+     "l_gripper_l_finger_joint": 0.45,
+     "l_gripper_r_finger_joint": 0.45,
+     "l_gripper_l_finger_tip_joint": 0.45,
+     "l_gripper_r_finger_tip_joint": 0.45}
+  left_gripper_hold_position: 0.30
   ctc_kp: 1000.0
   ctc_kd: 200.0
   admittance:

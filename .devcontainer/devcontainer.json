@@ -6,6 +6,14 @@
         "dockerfile": "Dockerfile"
     },
     "workspaceFolder": "/workspace",
+    "containerEnv": {
+        "HTTP_PROXY": "http://127.0.0.1:7890",
+        "HTTPS_PROXY": "http://127.0.0.1:7890",
+        "http_proxy": "http://127.0.0.1:7890",
+        "https_proxy": "http://127.0.0.1:7890",
+        "NO_PROXY": "localhost,127.0.0.1,::1",
+        "no_proxy": "localhost,127.0.0.1,::1"
+    },
     "mounts": [
         "source=${localWorkspaceFolder},target=/workspace,type=bind",
         "source=${localEnv:HOME}/.config/xiaomi-mimo/api_key,target=/home/user/.config/xiaomi-mimo/api_key,type=bind,readonly",

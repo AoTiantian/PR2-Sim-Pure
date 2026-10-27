@@ -20,6 +20,7 @@ class ContractGuard(Node):
         "ctc_payload_force_z",
         "ctc_vertical_hold_force_limit",
         "left_wrist_tare_duration_sec",
+        "require_friction_grasp",
     )
     QP_NAMES = (
         "pose_tracking_enable",
@@ -78,6 +79,7 @@ class ContractGuard(Node):
             "left_wrist_tare_duration_sec": float(
                 self.get_parameter("expected_tare_duration_sec").value
             ),
+            "require_friction_grasp": True,
         }
         expected_qp = {
             "pose_tracking_enable": False,
